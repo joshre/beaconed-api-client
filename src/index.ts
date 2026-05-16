@@ -43,6 +43,11 @@ export type {
 } from './resources/optimizations.js';
 
 export type {
+  BulkOptimizationInput,
+  BulkOptimizationResult,
+} from './resources/bulk-optimizations.js';
+
+export type {
   Score,
   ScoreDetail,
   ScoreCalculationResult,

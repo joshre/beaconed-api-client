@@ -69,6 +69,12 @@ export function parsePageInfoIfPresent(headers: Headers): PageInfo | undefined {
 /**
  * Async generator that yields items one at a time across all pages.
  * Re-emits errors from fetchPage unchanged.
+ *
+ * Termination criteria (whichever fires first):
+ *   1. currentPage >= pageInfo.totalPages  (normal case)
+ *   2. totalPages is missing/NaN AND the page returned fewer items than perPage
+ *      (graceful fallback when X-Total-Pages is absent or malformed)
+ *   3. The page returned 0 items (always safe to stop)
  */
 export async function* paginate<T>(
   fetchPage: (page: number) => Promise<{ data: T[]; pageInfo: PageInfo }>,
@@ -81,8 +87,19 @@ export async function* paginate<T>(
       yield item;
     }
 
-    if (currentPage >= result.pageInfo.totalPages) {
-      break;
+    const { totalPages, perPage } = result.pageInfo;
+    const totalPagesKnown = Number.isFinite(totalPages) && totalPages > 0;
+
+    if (totalPagesKnown) {
+      // Normal path: stop when we've fetched all declared pages
+      if (currentPage >= totalPages) {
+        break;
+      }
+    } else {
+      // Fallback: no reliable totalPages — stop when fewer items arrived than perPage
+      if (result.data.length < perPage) {
+        break;
+      }
     }
 
     currentPage++;

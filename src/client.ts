@@ -24,6 +24,7 @@
 
 import { ProductsResource } from './resources/products.js';
 import { OptimizationsResource } from './resources/optimizations.js';
+import { BulkOptimizationsResource } from './resources/bulk-optimizations.js';
 import { ScoresResource } from './resources/scores.js';
 import { SettingsResource } from './resources/settings.js';
 import { WebhooksResource } from './resources/webhooks.js';
@@ -41,6 +42,7 @@ export class BeaconedClient {
   readonly userAgent: string;
   readonly products: ProductsResource;
   readonly optimizations: OptimizationsResource;
+  readonly bulkOptimizations: BulkOptimizationsResource;
   readonly scores: ScoresResource;
   readonly settings: SettingsResource;
   readonly webhooks: WebhooksResource;
@@ -55,6 +57,7 @@ export class BeaconedClient {
       config.userAgent ?? `@joshre/beaconed-api-client/${VERSION}`;
     this.products = new ProductsResource(this);
     this.optimizations = new OptimizationsResource(this);
+    this.bulkOptimizations = new BulkOptimizationsResource(this);
     this.scores = new ScoresResource(this);
     this.settings = new SettingsResource(this);
     this.webhooks = new WebhooksResource(this);

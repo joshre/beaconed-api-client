@@ -15,6 +15,7 @@ import yaml from 'js-yaml';
 import Ajv from 'ajv';
 import type { Product, ProductDetail, ProductCreateInput } from '../src/resources/products.js';
 import type { Optimization, OptimizationDetail } from '../src/resources/optimizations.js';
+import type { BulkOptimizationInput, BulkOptimizationResult } from '../src/resources/bulk-optimizations.js';
 import type { Score, ScoreDetail } from '../src/resources/scores.js';
 import type { Settings } from '../src/resources/settings.js';
 import type { Webhook, WebhookDetail, WebhookWithSecret } from '../src/resources/webhooks.js';
@@ -767,5 +768,81 @@ describe('Contract: ScoreCalculationResult schema', () => {
     const valid = validate(sample);
     if (!valid) console.error('AJV errors (ScoreCalculationResult):', validate.errors);
     expect(valid).toBe(true);
+  });
+});
+
+// ---- M4a contract tests: bulk_optimizations ----
+
+describe('Contract: BulkOptimization request body (POST /api/v1/bulk_optimizations)', () => {
+  // Spec: openapi/v1.yaml lines 1336-1356 — inline requestBody schema, no named component.
+  it('validates a BulkOptimizationInput with product_ids and fields (SPEC inline — no named component)', () => {
+    // Built from inline schema at spec lines 1341-1356
+    const requestSchema = {
+      type: 'object',
+      required: ['product_ids'],
+      properties: {
+        product_ids: {
+          type: 'array',
+          items: { type: 'string', format: 'uuid' },
+        },
+        fields: {
+          type: 'array',
+          items: {
+            type: 'string',
+            enum: ['title', 'description', 'alt_text', 'meta_title', 'meta_description', 'tags', 'product_type', 'og_title', 'og_description'],
+          },
+        },
+      },
+    };
+
+    const validate = ajv.compile(requestSchema);
+
+    const full: BulkOptimizationInput = {
+      product_ids: ['uuid-1', 'uuid-2', 'uuid-3'],
+      fields: ['title', 'description'],
+    };
+    expect(validate(full)).toBe(true);
+
+    // fields is optional
+    const minimal: BulkOptimizationInput = {
+      product_ids: ['uuid-1'],
+    };
+    expect(validate(minimal)).toBe(true);
+
+    // product_ids is required — missing it should fail
+    const missing = { fields: ['title'] };
+    expect(validate(missing)).toBe(false);
+  });
+});
+
+describe('Contract: BulkOptimization response body (POST /api/v1/bulk_optimizations 202)', () => {
+  // Spec: openapi/v1.yaml lines 1362-1383 — inline response schema, no named component.
+  it('validates a BulkOptimizationResult against the spec response schema (SPEC inline — no named component)', () => {
+    // Built from inline schema at spec lines 1366-1383
+    const responseSchema = {
+      type: 'object',
+      properties: {
+        queued_count: { type: 'integer' },
+        queued_product_ids: { type: 'array', items: { type: 'string', format: 'uuid' } },
+        skipped_product_ids: { type: 'array', items: { type: 'string', format: 'uuid' } },
+        credits_remaining: { type: ['integer', 'null'] },
+      },
+    };
+
+    const validate = ajv.compile(responseSchema);
+
+    const sample: BulkOptimizationResult = {
+      queued_count: 3,
+      queued_product_ids: ['uuid-1', 'uuid-2', 'uuid-3'],
+      skipped_product_ids: [],
+      credits_remaining: 47,
+    };
+    const valid = validate(sample);
+    if (!valid) console.error('AJV errors (BulkOptimizationResult):', validate.errors);
+    expect(valid).toBe(true);
+
+    // credits_remaining: null is valid (unlimited plan)
+    const nullCredits: BulkOptimizationResult = { ...sample, credits_remaining: null };
+    expect(validate(nullCredits)).toBe(true);
   });
 });

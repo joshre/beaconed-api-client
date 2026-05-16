@@ -148,6 +148,56 @@ describe('paginate', () => {
   });
 });
 
+describe('paginate — fallback when totalPages is missing/NaN', () => {
+  it('stops when data.length < perPage (no totalPages signal)', async () => {
+    // Simulate a server that omits or returns NaN for totalPages
+    const pages = [
+      { data: ['a', 'b', 'c'], pageInfo: { page: 1, perPage: 3, total: 0, totalPages: NaN } },
+      { data: ['d', 'e'],       pageInfo: { page: 2, perPage: 3, total: 0, totalPages: NaN } },
+    ];
+
+    let call = 0;
+    const fetchPage = async (_page: number) => pages[call++];
+
+    const results: string[] = [];
+    for await (const item of paginate(fetchPage)) {
+      results.push(item);
+    }
+
+    // Page 1 has 3 items == perPage → continue. Page 2 has 2 < perPage → stop.
+    expect(results).toEqual(['a', 'b', 'c', 'd', 'e']);
+  });
+
+  it('stops immediately when first page has 0 items and totalPages is NaN', async () => {
+    const fetchPage = async (_page: number) => ({
+      data: [] as string[],
+      pageInfo: { page: 1, perPage: 25, total: 0, totalPages: NaN },
+    });
+
+    const results: string[] = [];
+    for await (const item of paginate(fetchPage)) {
+      results.push(item);
+    }
+
+    expect(results).toHaveLength(0);
+  });
+
+  it('respects totalPages: 0 (empty collection declared via valid headers)', async () => {
+    // totalPages: 0 is not a valid positive integer — treated as missing, fallback by data length
+    const fetchPage = async (_page: number) => ({
+      data: [] as string[],
+      pageInfo: { page: 1, perPage: 25, total: 0, totalPages: 0 },
+    });
+
+    const results: string[] = [];
+    for await (const item of paginate(fetchPage)) {
+      results.push(item);
+    }
+
+    expect(results).toHaveLength(0);
+  });
+});
+
 /**
  * Integration: listAll() walks 3 mocked pages via OptimizationsResource.listAll()
  * and asserts the merged result count.
