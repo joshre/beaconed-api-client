@@ -1,28 +1,50 @@
 /**
- * BeaconedClient — placeholder for M1 implementation.
+ * BeaconedClient — the main entry point for the @joshre/beaconed-api-client library.
  *
- * The full HTTP layer, resource namespaces, retry logic, and pagination
- * iterators land in Milestone 1. This stub is enough to prove the toolchain
- * compiles and the smoke test passes.
+ * ## Authentication
+ *
+ * All API requests require authentication via the `Authorization` header. Two methods are supported:
+ *
+ * **API Key (recommended)**: Pass your API key directly as a Bearer token.
+ *
+ * ```
+ * Authorization: Bearer <your-api-key>
+ * ```
+ *
+ * **JWT Token**: Generate a JWT from your API key and pass it as a Bearer token.
+ *
+ * ```
+ * Authorization: Bearer <your-jwt-token>
+ * ```
+ *
+ * Generate API keys in your Beaconed dashboard under Settings > API Keys.
+ *
+ * @see https://beaconed.ai/docs
  */
 
-export interface BeaconedClientOptions {
+import { ProductsResource } from './resources/products.js';
+import { VERSION } from './version.js';
+
+export interface BeaconedClientConfig {
   apiKey: string;
   baseUrl?: string;
-  xClient?: string;
-  timeout?: number;
-  maxRetries?: number;
+  userAgent?: string;
 }
 
 export class BeaconedClient {
-  readonly config: BeaconedClientOptions;
+  readonly apiKey: string;
+  readonly baseUrl: string;
+  readonly userAgent: string;
+  readonly products: ProductsResource;
 
-  constructor(options: BeaconedClientOptions) {
-    this.config = {
-      baseUrl: 'https://beaconed.ai',
-      timeout: 30_000,
-      maxRetries: 3,
-      ...options,
-    };
+  constructor(config: BeaconedClientConfig) {
+    if (!config.apiKey) {
+      throw new Error('BeaconedClient: apiKey is required');
+    }
+    this.apiKey = config.apiKey;
+    this.baseUrl = (config.baseUrl ?? 'https://beaconed.ai').replace(/\/$/, '');
+    this.userAgent =
+      config.userAgent ?? `@joshre/beaconed-api-client/${VERSION}`;
+    this.products = new ProductsResource(this);
   }
 }

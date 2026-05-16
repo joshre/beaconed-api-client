@@ -12,19 +12,59 @@ pnpm add @joshre/beaconed-api-client
 
 ## Quickstart
 
+Get your API key at [beaconed.ai/docs](https://beaconed.ai/docs) under Settings > API Keys.
+
 ```typescript
 import { BeaconedClient } from '@joshre/beaconed-api-client';
 
-const client = new BeaconedClient({ apiKey: process.env.BEACONED_API_KEY! });
+const beaconed = new BeaconedClient({ apiKey: process.env.BEACONED_API_KEY! });
 
-// List products (first page)
-const page = await client.products.list({ per_page: 25 });
-console.log(page.data);
+// Fetch a single product by ID
+const product = await beaconed.products.get('abc-123');
+console.log(product.title, product.readiness_score);
+```
 
-// Auto-paginate all products
-for await (const product of client.products.listAll()) {
-  console.log(product.id, product.title);
+## Error handling
+
+```typescript
+import { BeaconedClient, BeaconedNotFoundError, BeaconedValidationError } from '@joshre/beaconed-api-client';
+
+const beaconed = new BeaconedClient({ apiKey: process.env.BEACONED_API_KEY! });
+
+try {
+  const product = await beaconed.products.get('bad-id');
+} catch (err) {
+  if (err instanceof BeaconedNotFoundError) {
+    console.error('Product not found');
+  } else if (err instanceof BeaconedValidationError) {
+    console.error('Validation errors:', err.validationErrors);
+  } else {
+    throw err;
+  }
 }
 ```
 
-Get your API key at [beaconed.ai](https://beaconed.ai) under Settings > API Keys.
+## Authentication
+
+Pass your API key directly — no JWT exchange required:
+
+```typescript
+const beaconed = new BeaconedClient({
+  apiKey: 'your_api_key_here',
+  baseUrl: 'https://beaconed.ai', // default; override for local dev
+});
+```
+
+## Error classes
+
+| Class | Status | Description |
+|-------|--------|-------------|
+| `BeaconedAuthError` | 401 | Missing or invalid API key |
+| `BeaconedForbiddenError` | 403 | Valid key, insufficient permissions |
+| `BeaconedNotFoundError` | 404 | Resource not found |
+| `BeaconedValidationError` | 422 | Validation failed — check `.validationErrors` |
+| `BeaconedRateLimitError` | 429 | Rate limited — check `.retryAfterSeconds` |
+| `BeaconedServerError` | 5xx | Server error |
+| `BeaconedNetworkError` | 0 | Network failure (fetch threw) |
+
+All classes extend `BeaconedError` which extends `Error`.
