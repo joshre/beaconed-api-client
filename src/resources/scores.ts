@@ -2,16 +2,18 @@
  * ScoresResource — score history endpoints
  *
  * Spec-backed endpoints:
- *   GET /api/v1/products/{product_id}/scores         (lines 789-836)
- *   GET /api/v1/products/{product_id}/scores/latest  (lines 838-882)
+ *   GET  /api/v1/products/{product_id}/scores            (lines 789-836)
+ *   GET  /api/v1/products/{product_id}/scores/latest     (lines 838-882)
+ *   POST /api/v1/products/{product_id}/scores/calculation (lines 884-907)
  *
  * Task-requested endpoints (SPEC-ABSENT — not in openapi/v1.yaml):
  *   GET /api/v1/scores        (scores.list)
  *   GET /api/v1/scores/latest (scores.latest)
  *
  * Types derived from openapi/v1.yaml:
- *   ScoreHistory (lines 326-344)
- *   ScoreDetail  (lines 360-394)
+ *   ScoreHistory          (lines 326-344)
+ *   ScoreDetail           (lines 360-394)
+ *   ScoreCalculationResult (lines 395-413)
  */
 
 import { request } from '../http.js';
@@ -37,6 +39,16 @@ export interface ScoreDetail extends Score {
   lowest_categories: Array<{ category: string; score: number }>;
   potential_improvement: number;
   improved: boolean;
+}
+
+// From openapi/v1.yaml components/schemas/ScoreCalculationResult (lines 395-413)
+export interface ScoreCalculationResult {
+  product_id: string;
+  overall_score: number;
+  grade: string;
+  category_scores: Record<string, unknown>;
+  recommendations: string[];
+  calculated_at: string;
 }
 
 // Query parameters for product score list (spec lines 803-824)
@@ -133,6 +145,24 @@ export class ScoresResource {
       signal: opts?.signal,
     });
     return { data: envelope.data, pageInfo: envelope.pageInfo! };
+  }
+
+  /**
+   * POST /api/v1/products/{product_id}/scores/calculation
+   * Recalculates the readiness score for a product. Returns 201 with full calculation result.
+   * EXPENSIVE-tier rate limit: 10 req/min.
+   * Spec: openapi/v1.yaml lines 884-907.
+   */
+  async calculate(
+    productId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<ScoreCalculationResult> {
+    const envelope = await request<ScoreCalculationResult>(this.client, {
+      method: 'POST',
+      path: `/api/v1/products/${encodeURIComponent(productId)}/scores/calculation`,
+      signal: opts?.signal,
+    });
+    return envelope.data;
   }
 
   /**

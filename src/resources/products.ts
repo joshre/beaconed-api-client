@@ -1,9 +1,10 @@
 /**
- * ProductsResource — GET /api/v1/products and GET /api/v1/products/{id}
+ * ProductsResource — /api/v1/products and nested endpoints
  *
  * Types derived from openapi/v1.yaml:
  *   Product      (lines 87-131)
  *   ProductDetail (lines 133-174, allOf extending Product)
+ *   ProductInput  (lines 176-231)
  *   Image        (lines 232-246)
  */
 
@@ -11,6 +12,7 @@ import { request } from '../http.js';
 import { paginate } from '../pagination.js';
 import type { BeaconedClient } from '../client.js';
 import type { PageInfo } from '../pagination.js';
+import type { ScoreCalculationResult } from './scores.js';
 
 // From openapi/v1.yaml components/schemas/Product (lines 87-131)
 export interface Product {
@@ -51,6 +53,63 @@ export interface ProductScoreListParams {
   since?: string;
   until?: string;
   grade?: string;
+}
+
+// From openapi/v1.yaml components/schemas/ProductInput (lines 176-231)
+// Used for POST /api/v1/products (create) — all fields optional except none required in spec.
+export interface ProductCreateInput {
+  title?: string;
+  description?: string;
+  handle?: string;
+  status?: 'active' | 'draft' | 'archived';
+  vendor?: string;
+  product_type?: string;
+  meta_title?: string;
+  meta_description?: string;
+  og_title?: string;
+  og_description?: string;
+  tags?: string;
+  /** Your system's product ID. Used for idempotency on create. */
+  external_id?: string;
+  images?: Array<{
+    id?: string;
+    src?: string;
+    altText?: string;
+    width?: number;
+    height?: number;
+  }>;
+}
+
+// Used for PATCH /api/v1/products/:id — all fields optional (partial update)
+export type ProductUpdateInput = ProductCreateInput;
+
+// Response type for POST /api/v1/products/:id/sync (spec lines 711-724)
+export interface ProductSyncResult {
+  message: string;
+  product_id: string;
+}
+
+// Request input for POST /api/v1/products/:id/optimization (spec lines 748-753)
+export interface ProductOptimizeInput {
+  fields?: Array<
+    | 'title'
+    | 'description'
+    | 'alt_text'
+    | 'meta_title'
+    | 'meta_description'
+    | 'tags'
+    | 'product_type'
+    | 'og_title'
+    | 'og_description'
+  >;
+}
+
+// Response type for POST /api/v1/products/:id/optimization (spec lines 760-776)
+export interface ProductOptimizeResult {
+  message: string;
+  product_id: string;
+  product_title: string;
+  status: string;
 }
 
 // Query parameters for GET /api/v1/products/{product_id}/optimizations
@@ -216,6 +275,101 @@ export class ProductsResource {
       signal: opts?.signal,
     });
     return { data: envelope.data, pageInfo: envelope.pageInfo! };
+  }
+
+  /**
+   * POST /api/v1/products
+   * Create a product from external data (non-Shopify).
+   * Use external_id for idempotency. Returns 201 with ProductDetail.
+   * Spec: openapi/v1.yaml lines 590-623.
+   */
+  async create(
+    input: ProductCreateInput,
+    opts?: { signal?: AbortSignal },
+  ): Promise<ProductDetail> {
+    const envelope = await request<ProductDetail>(this.client, {
+      method: 'POST',
+      path: '/api/v1/products',
+      body: { product: input },
+      signal: opts?.signal,
+    });
+    return envelope.data;
+  }
+
+  /**
+   * PATCH /api/v1/products/:id
+   * Update a product's fields. Only include fields you want to change.
+   * Returns 200 with updated ProductDetail.
+   * Spec: openapi/v1.yaml lines 656-693.
+   */
+  async update(
+    id: string,
+    input: ProductUpdateInput,
+    opts?: { signal?: AbortSignal },
+  ): Promise<ProductDetail> {
+    const envelope = await request<ProductDetail>(this.client, {
+      method: 'PATCH',
+      path: `/api/v1/products/${encodeURIComponent(id)}`,
+      body: { product: input },
+      signal: opts?.signal,
+    });
+    return envelope.data;
+  }
+
+  /**
+   * POST /api/v1/products/:id/sync
+   * Triggers a sync of the product from Shopify. Returns 202 (queued).
+   * EXPENSIVE-tier rate limit: 10 req/min.
+   * Spec: openapi/v1.yaml lines 695-724.
+   */
+  async sync(
+    id: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<ProductSyncResult> {
+    const envelope = await request<ProductSyncResult>(this.client, {
+      method: 'POST',
+      path: `/api/v1/products/${encodeURIComponent(id)}/sync`,
+      signal: opts?.signal,
+    });
+    return envelope.data;
+  }
+
+  /**
+   * POST /api/v1/products/:id/optimization
+   * Queue AI optimization for one or more fields on a product.
+   * Returns 202 (queued). EXPENSIVE-tier rate limit: 10 req/min.
+   * Spec: openapi/v1.yaml lines 726-787.
+   */
+  async optimize(
+    id: string,
+    input?: ProductOptimizeInput,
+    opts?: { signal?: AbortSignal },
+  ): Promise<ProductOptimizeResult> {
+    const envelope = await request<ProductOptimizeResult>(this.client, {
+      method: 'POST',
+      path: `/api/v1/products/${encodeURIComponent(id)}/optimization`,
+      body: input,
+      signal: opts?.signal,
+    });
+    return envelope.data;
+  }
+
+  /**
+   * POST /api/v1/products/:id/scores/calculation
+   * Recalculates the readiness score for a product. Returns 201 with full calculation result.
+   * EXPENSIVE-tier rate limit: 10 req/min.
+   * Spec: openapi/v1.yaml lines 884-907.
+   */
+  async calculateScore(
+    id: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<ScoreCalculationResult> {
+    const envelope = await request<ScoreCalculationResult>(this.client, {
+      method: 'POST',
+      path: `/api/v1/products/${encodeURIComponent(id)}/scores/calculation`,
+      signal: opts?.signal,
+    });
+    return envelope.data;
   }
 
   /**

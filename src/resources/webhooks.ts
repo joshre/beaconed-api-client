@@ -1,21 +1,27 @@
 /**
- * WebhooksResource — GET /api/v1/webhooks, /api/v1/webhooks/{id}
+ * WebhooksResource — /api/v1/webhooks endpoints
  *
  * Types derived from openapi/v1.yaml:
- *   Webhook      (lines 415-442)
- *   WebhookDetail (lines 444-460)
- *   WebhookEvent  (lines 485-492)
+ *   Webhook           (lines 415-442)
+ *   WebhookDetail     (lines 444-460)
+ *   WebhookCreate     (lines 461-484)
+ *   WebhookEvent      (lines 485-492)
+ *   WebhookWithSecret (M3a — webhook create response, secret shown once)
  *
  * Spec-backed GET endpoints:
- *   GET /api/v1/webhooks           (lines 1111-1138)
- *   GET /api/v1/webhooks/{id}      (lines 1187-1211)
- *   GET /api/v1/webhooks/events    (lines 1304-1325) — global event catalog, no {id}
+ *   GET    /api/v1/webhooks           (lines 1111-1138)
+ *   GET    /api/v1/webhooks/{id}      (lines 1187-1211)
+ *   GET    /api/v1/webhooks/events    (lines 1304-1325)
  *
- * Task-requested endpoint (SPEC-ABSENT — per-webhook delivery log not in openapi/v1.yaml):
+ * Mutation endpoints (M3a):
+ *   POST   /api/v1/webhooks           (lines 1140-1185)
+ *   PATCH  /api/v1/webhooks/{id}      (lines 1212-1254)
+ *   DELETE /api/v1/webhooks/{id}      (lines 1256-1272) — 204 No Content
+ *   POST   /api/v1/webhooks/{id}/test (lines 1273-1302)
+ *
+ * SPEC-ABSENT GET endpoint (per-webhook delivery log):
  *   webhooks.events(id, params?) — would be GET /api/v1/webhooks/{id}/events
- *   TODO: verify with API team whether per-webhook delivery history exists.
- *   Implemented as a stub that calls the global /api/v1/webhooks/events endpoint
- *   ignoring the id until the spec is updated.
+ *   TODO: verify with API team. Currently maps to global event catalog.
  */
 
 import { request } from '../http.js';
@@ -46,6 +52,46 @@ export interface WebhookDetail extends Webhook {
 export interface WebhookEvent {
   name: string;
   description: string;
+}
+
+// From openapi/v1.yaml components/schemas/WebhookCreate (lines 461-484)
+// Used for POST /api/v1/webhooks request body.
+export interface WebhookCreateInput {
+  /** HTTPS URL to receive webhook deliveries */
+  url: string;
+  /** Events to subscribe to */
+  events: Array<
+    | 'optimization.created'
+    | 'optimization.approved'
+    | 'optimization.rejected'
+    | 'optimization.applied'
+    | 'optimization.reverted'
+    | 'product.scored'
+    | 'product.synced'
+  >;
+}
+
+// Used for PATCH /api/v1/webhooks/:id — all fields optional
+export interface WebhookUpdateInput {
+  url?: string;
+  events?: string[];
+  status?: 'active' | 'paused';
+}
+
+/**
+ * Response type for POST /api/v1/webhooks.
+ * The secret is only included in the CREATE response — it is never returned again.
+ * Store it securely on first receipt. Spec: openapi/v1.yaml lines 1165-1172.
+ */
+export interface WebhookWithSecret extends WebhookDetail {
+  /** Signing secret for verifying webhook payloads. SHOWN ONLY ONCE on creation. */
+  secret: string;
+}
+
+// Response type for POST /api/v1/webhooks/:id/test (spec lines 1293-1302)
+export interface WebhookTestResult {
+  message: string;
+  webhook_id: string;
 }
 
 // Query parameters for GET /api/v1/webhooks (spec lines 1119-1127)
@@ -89,6 +135,73 @@ export class WebhooksResource {
     const envelope = await request<WebhookDetail>(this.client, {
       method: 'GET',
       path: `/api/v1/webhooks/${encodeURIComponent(id)}`,
+      signal: opts?.signal,
+    });
+    return envelope.data;
+  }
+
+  /**
+   * POST /api/v1/webhooks
+   * Creates a new webhook subscription. Returns 201 with WebhookWithSecret.
+   * The `secret` field is present ONLY in this response — store it securely.
+   * Spec: openapi/v1.yaml lines 1140-1185.
+   */
+  async create(
+    input: WebhookCreateInput,
+    opts?: { signal?: AbortSignal },
+  ): Promise<WebhookWithSecret> {
+    const envelope = await request<WebhookWithSecret>(this.client, {
+      method: 'POST',
+      path: '/api/v1/webhooks',
+      body: { webhook: input },
+      signal: opts?.signal,
+    });
+    return envelope.data;
+  }
+
+  /**
+   * PATCH /api/v1/webhooks/:id
+   * Updates a webhook subscription. Returns updated WebhookDetail.
+   * Spec: openapi/v1.yaml lines 1212-1254.
+   */
+  async update(
+    id: string,
+    input: WebhookUpdateInput,
+    opts?: { signal?: AbortSignal },
+  ): Promise<WebhookDetail> {
+    const envelope = await request<WebhookDetail>(this.client, {
+      method: 'PATCH',
+      path: `/api/v1/webhooks/${encodeURIComponent(id)}`,
+      body: { webhook: input },
+      signal: opts?.signal,
+    });
+    return envelope.data;
+  }
+
+  /**
+   * DELETE /api/v1/webhooks/:id
+   * Removes a webhook subscription. Returns 204 No Content.
+   * The HTTP wrapper returns undefined for empty 204 bodies; this method returns void.
+   * Spec: openapi/v1.yaml lines 1256-1272.
+   */
+  async delete(id: string, opts?: { signal?: AbortSignal }): Promise<void> {
+    await request<undefined>(this.client, {
+      method: 'DELETE',
+      path: `/api/v1/webhooks/${encodeURIComponent(id)}`,
+      signal: opts?.signal,
+    });
+    // 204 No Content — envelope.data is undefined; return void explicitly
+  }
+
+  /**
+   * POST /api/v1/webhooks/:id/test
+   * Sends a test event to the webhook. Returns 202 (queued).
+   * Spec: openapi/v1.yaml lines 1273-1302.
+   */
+  async test(id: string, opts?: { signal?: AbortSignal }): Promise<WebhookTestResult> {
+    const envelope = await request<WebhookTestResult>(this.client, {
+      method: 'POST',
+      path: `/api/v1/webhooks/${encodeURIComponent(id)}/test`,
       signal: opts?.signal,
     });
     return envelope.data;

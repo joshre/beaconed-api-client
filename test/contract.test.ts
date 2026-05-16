@@ -13,11 +13,11 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import yaml from 'js-yaml';
 import Ajv from 'ajv';
-import type { Product, ProductDetail } from '../src/resources/products.js';
+import type { Product, ProductDetail, ProductCreateInput } from '../src/resources/products.js';
 import type { Optimization, OptimizationDetail } from '../src/resources/optimizations.js';
 import type { Score, ScoreDetail } from '../src/resources/scores.js';
 import type { Settings } from '../src/resources/settings.js';
-import type { Webhook, WebhookDetail } from '../src/resources/webhooks.js';
+import type { Webhook, WebhookDetail, WebhookWithSecret } from '../src/resources/webhooks.js';
 
 // Load the OpenAPI spec once
 interface OpenApiSpec {
@@ -625,5 +625,147 @@ describe('Contract: TypeScript type coverage — new resources', () => {
       auto_push_on_approve: false,
     };
     expect(check.auto_push_on_approve).toBe(false);
+  });
+});
+
+// ---- M3a contract tests ----
+
+describe('Contract: ProductInput request body schema (POST /api/v1/products)', () => {
+  it('validates a full ProductCreateInput against the spec ProductInput schema', () => {
+    const schema = spec.components.schemas['ProductInput'];
+    const resolved = deepResolveRefs(schema, spec) as Record<string, unknown>;
+    const validate = ajv.compile(resolved);
+
+    // Build a fully-populated ProductCreateInput sample
+    const sample: ProductCreateInput = {
+      title: 'Organic Cotton Tee',
+      description: '<p>Great shirt</p>',
+      handle: 'organic-cotton-tee',
+      status: 'active',
+      vendor: 'EcoThreads',
+      product_type: 'Apparel',
+      meta_title: 'Organic Cotton Tee | EcoThreads',
+      meta_description: 'Shop our top organic tee.',
+      og_title: 'Organic Cotton Tee',
+      og_description: 'Sustainable and stylish.',
+      tags: 'organic,cotton',
+      external_id: 'ext-123',
+      images: [
+        { id: 'img-1', src: 'https://example.com/img.jpg', altText: 'Product image', width: 800, height: 800 },
+      ],
+    };
+
+    const valid = validate(sample);
+    if (!valid) console.error('AJV errors (ProductInput):', validate.errors);
+    expect(valid).toBe(true);
+  });
+
+  it('validates a minimal ProductCreateInput (all fields optional)', () => {
+    const schema = spec.components.schemas['ProductInput'];
+    const resolved = deepResolveRefs(schema, spec) as Record<string, unknown>;
+    const validate = ajv.compile(resolved);
+
+    // Empty object is valid — spec has no required fields in ProductInput
+    const sample: ProductCreateInput = {};
+
+    const valid = validate(sample);
+    if (!valid) console.error('AJV errors (ProductInput minimal):', validate.errors);
+    expect(valid).toBe(true);
+  });
+});
+
+describe('Contract: WebhookCreate request body schema (POST /api/v1/webhooks)', () => {
+  it('validates a WebhookCreateInput against the spec WebhookCreate schema', () => {
+    const schema = spec.components.schemas['WebhookCreate'];
+    const resolved = deepResolveRefs(schema, spec) as Record<string, unknown>;
+    const validate = ajv.compile(resolved);
+
+    const sample = {
+      url: 'https://example.com/webhooks',
+      events: ['optimization.applied', 'product.scored'],
+    };
+
+    const valid = validate(sample);
+    if (!valid) console.error('AJV errors (WebhookCreate):', validate.errors);
+    expect(valid).toBe(true);
+  });
+
+  it('rejects WebhookCreate missing required url field', () => {
+    const schema = spec.components.schemas['WebhookCreate'];
+    const resolved = deepResolveRefs(schema, spec) as Record<string, unknown>;
+    const validate = ajv.compile(resolved);
+
+    const invalid = { events: ['product.scored'] };
+    expect(validate(invalid)).toBe(false);
+  });
+
+  it('rejects WebhookCreate missing required events field', () => {
+    const schema = spec.components.schemas['WebhookCreate'];
+    const resolved = deepResolveRefs(schema, spec) as Record<string, unknown>;
+    const validate = ajv.compile(resolved);
+
+    const invalid = { url: 'https://example.com/webhooks' };
+    expect(validate(invalid)).toBe(false);
+  });
+});
+
+describe('Contract: WebhookWithSecret TypeScript type coverage', () => {
+  it('WebhookWithSecret extends WebhookDetail and includes secret', () => {
+    const check: WebhookWithSecret = {
+      id: 'wh-uuid',
+      url: 'https://example.com/webhooks',
+      events: ['optimization.applied'],
+      status: 'active',
+      failure_count: 0,
+      last_triggered_at: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+      last_success_at: null,
+      last_failure_at: null,
+      last_error: null,
+      secret: 'whsec_abc123',
+    };
+    expect(typeof check.secret).toBe('string');
+    expect(check.secret.length).toBeGreaterThan(0);
+  });
+});
+
+describe('Contract: OptimizationRejectInput schema', () => {
+  // SPEC-ABSENT named component: rejection body is defined inline in the path
+  // (openapi/v1.yaml lines 1029-1035), not as a named schema in components/schemas.
+  // We validate against a locally-defined schema.
+  it('validates an OptimizationRejectInput with optional reason (SPEC-ABSENT named component)', () => {
+    const rejectSchema = {
+      type: 'object',
+      properties: {
+        reason: { type: 'string' },
+      },
+    };
+    const validate = ajv.compile(rejectSchema);
+
+    expect(validate({ reason: 'Does not match brand voice' })).toBe(true);
+    expect(validate({})).toBe(true); // reason is optional
+    expect(validate({ reason: null })).toBe(false); // null not allowed — string only
+  });
+});
+
+describe('Contract: ScoreCalculationResult schema', () => {
+  it('validates a ScoreCalculationResult against the spec schema', () => {
+    const schema = spec.components.schemas['ScoreCalculationResult'];
+    const resolved = deepResolveRefs(schema, spec) as Record<string, unknown>;
+    const validate = ajv.compile(resolved);
+
+    const sample = {
+      product_id: 'prod-uuid',
+      overall_score: 88,
+      grade: 'excellent',
+      category_scores: { title: { score: 90 } },
+      recommendations: ['Optimize description'],
+      calculated_at: '2026-05-16T00:00:00Z',
+    };
+
+    const valid = validate(sample);
+    if (!valid) console.error('AJV errors (ScoreCalculationResult):', validate.errors);
+    expect(valid).toBe(true);
   });
 });

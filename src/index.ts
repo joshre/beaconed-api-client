@@ -23,6 +23,11 @@ export type {
   ProductListParams,
   ProductScoreListParams,
   ProductOptimizationListParams,
+  ProductCreateInput,
+  ProductUpdateInput,
+  ProductSyncResult,
+  ProductOptimizeInput,
+  ProductOptimizeResult,
   Image,
   OptimizationSummary,
   ScoreHistorySummary,
@@ -32,11 +37,15 @@ export type {
   Optimization,
   OptimizationDetail,
   OptimizationListParams,
+  OptimizationRejectInput,
+  OptimizationApplyResult,
+  OptimizationRevertResult,
 } from './resources/optimizations.js';
 
 export type {
   Score,
   ScoreDetail,
+  ScoreCalculationResult,
   ScoreListParams,
 } from './resources/scores.js';
 
@@ -46,6 +55,10 @@ export type {
   Webhook,
   WebhookDetail,
   WebhookEvent,
+  WebhookCreateInput,
+  WebhookUpdateInput,
+  WebhookWithSecret,
+  WebhookTestResult,
   WebhookListParams,
   WebhookEventsParams,
 } from './resources/webhooks.js';

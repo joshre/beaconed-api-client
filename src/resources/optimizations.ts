@@ -1,8 +1,15 @@
 /**
- * OptimizationsResource — GET /api/v1/optimizations
+ * OptimizationsResource — /api/v1/optimizations endpoints
  *
- * Types derived from openapi/v1.yaml components/schemas/Optimization (lines 248-288)
- * and OptimizationDetail (lines 290-311).
+ * Types derived from openapi/v1.yaml:
+ *   Optimization      (lines 248-288)
+ *   OptimizationDetail (lines 290-311)
+ *
+ * Mutation endpoints (M3a):
+ *   POST /api/v1/optimizations/:id/approval    (spec lines 983-1012)
+ *   POST /api/v1/optimizations/:id/rejection   (spec lines 1014-1047)
+ *   POST /api/v1/optimizations/:id/application (spec lines 1049-1079)
+ *   POST /api/v1/optimizations/:id/reversion   (spec lines 1080-1109)
  */
 
 import { request } from '../http.js';
@@ -43,6 +50,24 @@ export interface OptimizationDetail extends Optimization {
   shopify_error: string | null;
   image_shopify_id: number | null;
   approved_by_name: string | null;
+}
+
+// Input for POST /api/v1/optimizations/:id/rejection (spec lines 1029-1035)
+// reason is optional — spec has no required fields
+export interface OptimizationRejectInput {
+  reason?: string;
+}
+
+// Response type for POST /api/v1/optimizations/:id/application (spec lines 1068-1079)
+export interface OptimizationApplyResult {
+  message: string;
+  optimization_id: string;
+}
+
+// Response type for POST /api/v1/optimizations/:id/reversion (spec lines 1097-1109)
+export interface OptimizationRevertResult {
+  message: string;
+  optimization_id: string;
 }
 
 // Query parameters for GET /api/v1/optimizations (spec lines 919-942)
@@ -92,6 +117,71 @@ export class OptimizationsResource {
     const envelope = await request<OptimizationDetail>(this.client, {
       method: 'GET',
       path: `/api/v1/optimizations/${encodeURIComponent(id)}`,
+      signal: opts?.signal,
+    });
+    return envelope.data;
+  }
+
+  /**
+   * POST /api/v1/optimizations/:id/approval
+   * Approves a pending optimization. Returns updated OptimizationDetail.
+   * EXPENSIVE-tier rate limit: 10 req/min.
+   * Spec: openapi/v1.yaml lines 983-1012.
+   */
+  async approve(id: string, opts?: { signal?: AbortSignal }): Promise<OptimizationDetail> {
+    const envelope = await request<OptimizationDetail>(this.client, {
+      method: 'POST',
+      path: `/api/v1/optimizations/${encodeURIComponent(id)}/approval`,
+      signal: opts?.signal,
+    });
+    return envelope.data;
+  }
+
+  /**
+   * POST /api/v1/optimizations/:id/rejection
+   * Rejects a pending optimization. Optional reason in body.
+   * Returns updated OptimizationDetail.
+   * Spec: openapi/v1.yaml lines 1014-1047.
+   */
+  async reject(
+    id: string,
+    input?: OptimizationRejectInput,
+    opts?: { signal?: AbortSignal },
+  ): Promise<OptimizationDetail> {
+    const envelope = await request<OptimizationDetail>(this.client, {
+      method: 'POST',
+      path: `/api/v1/optimizations/${encodeURIComponent(id)}/rejection`,
+      body: input,
+      signal: opts?.signal,
+    });
+    return envelope.data;
+  }
+
+  /**
+   * POST /api/v1/optimizations/:id/application
+   * Pushes an approved optimization to Shopify. Returns 202 (queued).
+   * EXPENSIVE-tier rate limit: 10 req/min.
+   * Spec: openapi/v1.yaml lines 1049-1079.
+   */
+  async apply(id: string, opts?: { signal?: AbortSignal }): Promise<OptimizationApplyResult> {
+    const envelope = await request<OptimizationApplyResult>(this.client, {
+      method: 'POST',
+      path: `/api/v1/optimizations/${encodeURIComponent(id)}/application`,
+      signal: opts?.signal,
+    });
+    return envelope.data;
+  }
+
+  /**
+   * POST /api/v1/optimizations/:id/reversion
+   * Reverts an applied optimization back to original content. Returns 202 (queued).
+   * EXPENSIVE-tier rate limit: 10 req/min.
+   * Spec: openapi/v1.yaml lines 1080-1109.
+   */
+  async revert(id: string, opts?: { signal?: AbortSignal }): Promise<OptimizationRevertResult> {
+    const envelope = await request<OptimizationRevertResult>(this.client, {
+      method: 'POST',
+      path: `/api/v1/optimizations/${encodeURIComponent(id)}/reversion`,
       signal: opts?.signal,
     });
     return envelope.data;

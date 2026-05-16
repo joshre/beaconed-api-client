@@ -1,11 +1,12 @@
 /**
- * Tests for WebhooksResource — list, get, events, listAll
+ * Tests for WebhooksResource — list, get, events, listAll,
+ * create, update, delete, test (M3a mutations)
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { BeaconedClient } from '../src/client.js';
-import { BeaconedNotFoundError } from '../src/errors.js';
-import type { Webhook, WebhookDetail } from '../src/resources/webhooks.js';
+import { BeaconedNotFoundError, BeaconedValidationError } from '../src/errors.js';
+import type { Webhook, WebhookDetail, WebhookWithSecret } from '../src/resources/webhooks.js';
 
 function makeClient(): BeaconedClient {
   return new BeaconedClient({ apiKey: 'test-key', baseUrl: 'https://beaconed.ai' });
@@ -204,5 +205,206 @@ describe('WebhooksResource.listAll()', () => {
     }
 
     expect(collected).toEqual(['wh-1', 'wh-2']);
+  });
+});
+
+// ---- M3a mutation tests ----
+
+describe('WebhooksResource.create()', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('calls POST /api/v1/webhooks with wrapped body and returns WebhookWithSecret', async () => {
+    const created: WebhookWithSecret = {
+      ...sampleWebhookDetail,
+      id: 'wh-new',
+      secret: 'whsec_abc123def456',
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse(201, { data: created }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await makeClient().webhooks.create({
+      url: 'https://example.com/webhooks',
+      events: ['optimization.applied', 'product.scored'],
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://beaconed.ai/api/v1/webhooks');
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body).toHaveProperty('webhook');
+    const webhook = body['webhook'] as Record<string, unknown>;
+    expect(webhook['url']).toBe('https://example.com/webhooks');
+    expect(webhook['events']).toEqual(['optimization.applied', 'product.scored']);
+    expect(result.id).toBe('wh-new');
+  });
+
+  it('secret field is present and is a non-empty string', async () => {
+    const created: WebhookWithSecret = {
+      ...sampleWebhookDetail,
+      secret: 'whsec_xyz789',
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse(201, { data: created }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await makeClient().webhooks.create({
+      url: 'https://example.com/webhooks',
+      events: ['product.synced'],
+    });
+
+    expect(typeof result.secret).toBe('string');
+    expect(result.secret.length).toBeGreaterThan(0);
+    expect(result.secret).toBe('whsec_xyz789');
+  });
+
+  it('throws BeaconedValidationError on 422 with errors array', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse(422, {
+        success: false,
+        error: 'Validation failed',
+        errors: ['URL must be HTTPS', 'Events cannot be empty'],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    let caught: unknown;
+    try {
+      await makeClient().webhooks.create({ url: 'http://insecure.com', events: [] });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(BeaconedValidationError);
+    const ve = caught as BeaconedValidationError;
+    expect(ve.validationErrors).toContain('URL must be HTTPS');
+    expect(ve.validationErrors).toContain('Events cannot be empty');
+  });
+});
+
+describe('WebhooksResource.update()', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('calls PATCH /api/v1/webhooks/:id with wrapped body and returns WebhookDetail', async () => {
+    const updated: WebhookDetail = { ...sampleWebhookDetail, status: 'paused' };
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse(200, { data: updated }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await makeClient().webhooks.update('wh-1', { status: 'paused' });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://beaconed.ai/api/v1/webhooks/wh-1');
+    expect(init.method).toBe('PATCH');
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect((body['webhook'] as Record<string, unknown>)['status']).toBe('paused');
+    expect(result.status).toBe('paused');
+  });
+
+  it('allows partial updates (events only)', async () => {
+    const updated: WebhookDetail = { ...sampleWebhookDetail, events: ['optimization.applied'] };
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse(200, { data: updated }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await makeClient().webhooks.update('wh-1', { events: ['optimization.applied'] });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect((body['webhook'] as Record<string, unknown>)['events']).toEqual(['optimization.applied']);
+    expect(result.events).toEqual(['optimization.applied']);
+  });
+
+  it('throws BeaconedNotFoundError on 404', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse(404, { success: false, error: 'Not found', errors: [] }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(makeClient().webhooks.update('no-such', {})).rejects.toBeInstanceOf(BeaconedNotFoundError);
+  });
+});
+
+describe('WebhooksResource.delete()', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('calls DELETE /api/v1/webhooks/:id and returns void on 204', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(null, { status: 204 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await makeClient().webhooks.delete('wh-1');
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://beaconed.ai/api/v1/webhooks/wh-1');
+    expect(init.method).toBe('DELETE');
+    expect(result).toBeUndefined();
+  });
+
+  it('URL-encodes the webhook id', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(null, { status: 204 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await makeClient().webhooks.delete('wh/1 2');
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/api/v1/webhooks/wh%2F1%202');
+  });
+
+  it('throws BeaconedNotFoundError on 404', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse(404, { success: false, error: 'Not found', errors: [] }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(makeClient().webhooks.delete('no-such')).rejects.toBeInstanceOf(BeaconedNotFoundError);
+  });
+});
+
+describe('WebhooksResource.test()', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('calls POST /api/v1/webhooks/:id/test and returns WebhookTestResult', async () => {
+    const testResult = { message: 'Test queued', webhook_id: 'wh-1' };
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse(202, { data: testResult }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await makeClient().webhooks.test('wh-1');
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://beaconed.ai/api/v1/webhooks/wh-1/test');
+    expect(init.method).toBe('POST');
+    expect(result.message).toBe('Test queued');
+    expect(result.webhook_id).toBe('wh-1');
+  });
+
+  it('sends no body (test has no request body)', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse(202, { data: { message: 'ok', webhook_id: 'x' } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await makeClient().webhooks.test('x');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.body).toBeUndefined();
+  });
+
+  it('throws BeaconedNotFoundError on 404', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse(404, { success: false, error: 'Not found', errors: [] }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(makeClient().webhooks.test('no-such')).rejects.toBeInstanceOf(BeaconedNotFoundError);
   });
 });

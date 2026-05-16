@@ -1,5 +1,6 @@
 /**
- * Tests for ScoresResource — listByProduct, latestByProduct, list, latest, listAll*
+ * Tests for ScoresResource — listByProduct, latestByProduct, list, latest, listAll*,
+ * calculate (M3a mutation)
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -203,5 +204,65 @@ describe('ScoresResource.listAllByProduct()', () => {
     }
 
     expect(collected).toEqual(['score-1', 'score-2']);
+  });
+});
+
+// ---- M3a mutation tests ----
+
+describe('ScoresResource.calculate()', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('calls POST /api/v1/products/:id/scores/calculation and returns ScoreCalculationResult', async () => {
+    const calcResult = {
+      product_id: 'prod-1',
+      overall_score: 88,
+      grade: 'excellent',
+      category_scores: { title: { score: 90, weight: 0.2 } },
+      recommendations: ['Optimize meta description'],
+      calculated_at: '2026-05-16T00:00:00Z',
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse(201, { data: calcResult }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await makeClient().scores.calculate('prod-1');
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://beaconed.ai/api/v1/products/prod-1/scores/calculation');
+    expect(init.method).toBe('POST');
+    expect(result.overall_score).toBe(88);
+    expect(result.product_id).toBe('prod-1');
+    expect(result.calculated_at).toBe('2026-05-16T00:00:00Z');
+  });
+
+  it('sends no body (POST with no request body)', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse(201, {
+        data: {
+          product_id: 'x',
+          overall_score: 0,
+          grade: 'critical',
+          category_scores: {},
+          recommendations: [],
+          calculated_at: '2026-01-01T00:00:00Z',
+        },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await makeClient().scores.calculate('x');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.body).toBeUndefined();
+  });
+
+  it('throws BeaconedNotFoundError on 404', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse(404, { success: false, error: 'Not found', errors: [] }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(makeClient().scores.calculate('no-such')).rejects.toBeInstanceOf(BeaconedNotFoundError);
   });
 });
