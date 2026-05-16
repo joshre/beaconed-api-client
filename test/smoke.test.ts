@@ -30,5 +30,42 @@ describe('BeaconedClient', () => {
     const client = new BeaconedClient({ apiKey: 'test-key' });
     expect(client.products).toBeDefined();
     expect(typeof client.products.get).toBe('function');
+    expect(typeof client.products.list).toBe('function');
+    expect(typeof client.products.scores).toBe('function');
+    expect(typeof client.products.optimizations).toBe('function');
+    expect(typeof client.products.listAll).toBe('function');
+  });
+
+  it('exposes an optimizations resource', () => {
+    const client = new BeaconedClient({ apiKey: 'test-key' });
+    expect(client.optimizations).toBeDefined();
+    expect(typeof client.optimizations.list).toBe('function');
+    expect(typeof client.optimizations.get).toBe('function');
+    expect(typeof client.optimizations.listAll).toBe('function');
+  });
+
+  it('exposes a scores resource', () => {
+    const client = new BeaconedClient({ apiKey: 'test-key' });
+    expect(client.scores).toBeDefined();
+    expect(typeof client.scores.listByProduct).toBe('function');
+    expect(typeof client.scores.latestByProduct).toBe('function');
+    expect(typeof client.scores.list).toBe('function');
+    expect(typeof client.scores.latest).toBe('function');
+    expect(typeof client.scores.listAll).toBe('function');
+  });
+
+  it('exposes a settings resource', () => {
+    const client = new BeaconedClient({ apiKey: 'test-key' });
+    expect(client.settings).toBeDefined();
+    expect(typeof client.settings.get).toBe('function');
+  });
+
+  it('exposes a webhooks resource', () => {
+    const client = new BeaconedClient({ apiKey: 'test-key' });
+    expect(client.webhooks).toBeDefined();
+    expect(typeof client.webhooks.list).toBe('function');
+    expect(typeof client.webhooks.get).toBe('function');
+    expect(typeof client.webhooks.events).toBe('function');
+    expect(typeof client.webhooks.listAll).toBe('function');
   });
 });

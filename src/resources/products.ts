@@ -1,12 +1,77 @@
 /**
- * ProductsResource — GET /api/v1/products/{id}
+ * ProductsResource — GET /api/v1/products and GET /api/v1/products/{id}
  *
- * Types derived from openapi/v1.yaml components/schemas/ProductDetail (lines 133-174)
- * which is an allOf extending Product (lines 87-131).
+ * Types derived from openapi/v1.yaml:
+ *   Product      (lines 87-131)
+ *   ProductDetail (lines 133-174, allOf extending Product)
+ *   Image        (lines 232-246)
  */
 
 import { request } from '../http.js';
+import { paginate } from '../pagination.js';
 import type { BeaconedClient } from '../client.js';
+import type { PageInfo } from '../pagination.js';
+
+// From openapi/v1.yaml components/schemas/Product (lines 87-131)
+export interface Product {
+  id: string;
+  shopify_id: number | null;
+  title: string;
+  handle: string;
+  status: 'active' | 'draft' | 'archived';
+  vendor: string | null;
+  product_type: string | null;
+  readiness_score: number;
+  readiness_grade: 'excellent' | 'good' | 'fair' | 'poor' | 'critical';
+  optimization_status: string | null;
+  pending_optimizations_count: number;
+  primary_image_url: string | null;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Query parameters for GET /api/v1/products (spec lines 504-546)
+export interface ProductListParams {
+  page?: number;
+  per_page?: number;
+  status?: 'active' | 'draft' | 'archived';
+  min_score?: number;
+  max_score?: number;
+  grade?: 'excellent' | 'good' | 'fair' | 'poor' | 'critical';
+  needs_optimization?: boolean;
+  /** Search by title */
+  q?: string;
+}
+
+// Query parameters for GET /api/v1/products/{product_id}/scores (spec lines 803-824)
+export interface ProductScoreListParams {
+  page?: number;
+  per_page?: number;
+  since?: string;
+  until?: string;
+  grade?: string;
+}
+
+// Query parameters for GET /api/v1/products/{product_id}/optimizations
+// The spec uses GET /api/v1/optimizations with product_id filter (lines 919-942).
+// There is no dedicated /products/{id}/optimizations endpoint in openapi/v1.yaml.
+// This method calls the global optimizations endpoint with product_id set.
+export interface ProductOptimizationListParams {
+  page?: number;
+  per_page?: number;
+  status?: 'pending' | 'approved' | 'rejected' | 'applied' | 'reverted';
+  field?:
+    | 'title'
+    | 'description'
+    | 'alt_text'
+    | 'meta_title'
+    | 'meta_description'
+    | 'tags'
+    | 'product_type'
+    | 'og_title'
+    | 'og_description';
+}
 
 // From openapi/v1.yaml components/schemas/Image (lines 232-246)
 export interface Image {
@@ -86,6 +151,23 @@ export class ProductsResource {
   constructor(private readonly client: BeaconedClient) {}
 
   /**
+   * GET /api/v1/products
+   * Returns a paginated list of products.
+   */
+  async list(
+    params?: ProductListParams,
+    opts?: { signal?: AbortSignal },
+  ): Promise<{ data: Product[]; pageInfo: PageInfo }> {
+    const envelope = await request<Product[]>(this.client, {
+      method: 'GET',
+      path: '/api/v1/products',
+      query: params as Record<string, string | number | undefined>,
+      signal: opts?.signal,
+    });
+    return { data: envelope.data, pageInfo: envelope.pageInfo! };
+  }
+
+  /**
    * GET /api/v1/products/{id}
    * Returns detailed information about a specific product.
    */
@@ -96,5 +178,55 @@ export class ProductsResource {
       signal: opts?.signal,
     });
     return envelope.data;
+  }
+
+  /**
+   * GET /api/v1/products/{id}/scores
+   * Returns the score history for a product.
+   */
+  async scores(
+    id: string,
+    params?: ProductScoreListParams,
+    opts?: { signal?: AbortSignal },
+  ): Promise<{ data: ScoreHistorySummary[]; pageInfo: PageInfo }> {
+    const envelope = await request<ScoreHistorySummary[]>(this.client, {
+      method: 'GET',
+      path: `/api/v1/products/${encodeURIComponent(id)}/scores`,
+      query: params as Record<string, string | number | undefined>,
+      signal: opts?.signal,
+    });
+    return { data: envelope.data, pageInfo: envelope.pageInfo! };
+  }
+
+  /**
+   * GET /api/v1/optimizations?product_id={id}
+   * Returns optimizations for a specific product.
+   * Note: The spec does not define a dedicated /products/{id}/optimizations path.
+   * This method calls the global /api/v1/optimizations endpoint with product_id set.
+   */
+  async optimizations(
+    id: string,
+    params?: ProductOptimizationListParams,
+    opts?: { signal?: AbortSignal },
+  ): Promise<{ data: OptimizationSummary[]; pageInfo: PageInfo }> {
+    const envelope = await request<OptimizationSummary[]>(this.client, {
+      method: 'GET',
+      path: '/api/v1/optimizations',
+      query: { ...params, product_id: id } as Record<string, string | number | undefined>,
+      signal: opts?.signal,
+    });
+    return { data: envelope.data, pageInfo: envelope.pageInfo! };
+  }
+
+  /**
+   * Async iterator that yields all products across all pages.
+   */
+  listAll(
+    params?: Omit<ProductListParams, 'page'>,
+    opts?: { signal?: AbortSignal },
+  ): AsyncGenerator<Product> {
+    return paginate((page) =>
+      this.list({ ...params, page }, opts),
+    );
   }
 }

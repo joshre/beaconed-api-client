@@ -23,6 +23,10 @@
  */
 
 import { ProductsResource } from './resources/products.js';
+import { OptimizationsResource } from './resources/optimizations.js';
+import { ScoresResource } from './resources/scores.js';
+import { SettingsResource } from './resources/settings.js';
+import { WebhooksResource } from './resources/webhooks.js';
 import { VERSION } from './version.js';
 
 export interface BeaconedClientConfig {
@@ -36,6 +40,10 @@ export class BeaconedClient {
   readonly baseUrl: string;
   readonly userAgent: string;
   readonly products: ProductsResource;
+  readonly optimizations: OptimizationsResource;
+  readonly scores: ScoresResource;
+  readonly settings: SettingsResource;
+  readonly webhooks: WebhooksResource;
 
   constructor(config: BeaconedClientConfig) {
     if (!config.apiKey) {
@@ -46,5 +54,9 @@ export class BeaconedClient {
     this.userAgent =
       config.userAgent ?? `@joshre/beaconed-api-client/${VERSION}`;
     this.products = new ProductsResource(this);
+    this.optimizations = new OptimizationsResource(this);
+    this.scores = new ScoresResource(this);
+    this.settings = new SettingsResource(this);
+    this.webhooks = new WebhooksResource(this);
   }
 }

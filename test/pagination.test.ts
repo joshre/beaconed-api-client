@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { parsePageInfo, parsePageInfoIfPresent, paginate } from '../src/pagination.js';
 import { BeaconedError } from '../src/errors.js';
+import { BeaconedClient } from '../src/client.js';
+import type { Optimization } from '../src/resources/optimizations.js';
 
 function makeHeaders(entries: Record<string, string>): Headers {
   return new Headers(entries);
@@ -143,5 +145,80 @@ describe('paginate', () => {
         // consume
       }
     }).rejects.toBe(beaconedError);
+  });
+});
+
+/**
+ * Integration: listAll() walks 3 mocked pages via OptimizationsResource.listAll()
+ * and asserts the merged result count.
+ */
+describe('pagination integration: listAll() across 3 pages', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('collects all 9 optimizations from 3 pages of 3', async () => {
+    function makeOptimization(id: string): Optimization {
+      return {
+        id,
+        product_id: 'prod-1',
+        product_title: 'Test',
+        field: 'title',
+        status: 'pending',
+        score_before: null,
+        score_after: null,
+        approved_at: null,
+        applied_at: null,
+        reverted_at: null,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      };
+    }
+
+    function makeResponse(
+      body: unknown,
+      paginationHdrs: Record<string, string>,
+    ): Response {
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...paginationHdrs },
+      });
+    }
+
+    function pageHeaders(page: number): Record<string, string> {
+      return {
+        'X-Page': String(page),
+        'X-Per-Page': '3',
+        'X-Total': '9',
+        'X-Total-Pages': '3',
+      };
+    }
+
+    const page1 = [makeOptimization('opt-1'), makeOptimization('opt-2'), makeOptimization('opt-3')];
+    const page2 = [makeOptimization('opt-4'), makeOptimization('opt-5'), makeOptimization('opt-6')];
+    const page3 = [makeOptimization('opt-7'), makeOptimization('opt-8'), makeOptimization('opt-9')];
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeResponse({ data: page1 }, pageHeaders(1)))
+      .mockResolvedValueOnce(makeResponse({ data: page2 }, pageHeaders(2)))
+      .mockResolvedValueOnce(makeResponse({ data: page3 }, pageHeaders(3)));
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = new BeaconedClient({ apiKey: 'test-key', baseUrl: 'https://beaconed.ai' });
+    const collected: string[] = [];
+    for await (const opt of client.optimizations.listAll()) {
+      collected.push(opt.id);
+    }
+
+    expect(collected).toHaveLength(9);
+    expect(collected[0]).toBe('opt-1');
+    expect(collected[8]).toBe('opt-9');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    // Verify page numbers were requested sequentially
+    const urls = fetchMock.mock.calls.map((c) => (c as [string])[0]);
+    expect(urls[0]).toContain('page=1');
+    expect(urls[1]).toContain('page=2');
+    expect(urls[2]).toContain('page=3');
   });
 });

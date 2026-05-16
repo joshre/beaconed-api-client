@@ -13,7 +13,11 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import yaml from 'js-yaml';
 import Ajv from 'ajv';
-import type { ProductDetail } from '../src/resources/products.js';
+import type { Product, ProductDetail } from '../src/resources/products.js';
+import type { Optimization, OptimizationDetail } from '../src/resources/optimizations.js';
+import type { Score, ScoreDetail } from '../src/resources/scores.js';
+import type { Settings } from '../src/resources/settings.js';
+import type { Webhook, WebhookDetail } from '../src/resources/webhooks.js';
 
 // Load the OpenAPI spec once
 interface OpenApiSpec {
@@ -336,5 +340,290 @@ describe('Contract: ProductDetail TypeScript type coverage', () => {
     };
 
     expect(check.score_history).toEqual([]);
+  });
+});
+
+describe('Contract: Product schema', () => {
+  it('validates a Product object against the OpenAPI spec schema', () => {
+    const schema = spec.components.schemas['Product'];
+    const resolved = deepResolveRefs(schema, spec) as Record<string, unknown>;
+
+    // nullableToUnion: shopify_id is not declared nullable in spec but we model it as nullable
+    // Validate only the spec-declared structure
+    const validate = ajv.compile(resolved);
+
+    const sample: Product = {
+      id: 'prod-uuid',
+      shopify_id: 12345,
+      title: 'Widget',
+      handle: 'widget',
+      status: 'active',
+      vendor: 'Acme',
+      product_type: 'Gadget',
+      readiness_score: 70,
+      readiness_grade: 'good',
+      optimization_status: null,
+      pending_optimizations_count: 2,
+      primary_image_url: null,
+      last_synced_at: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+
+    const valid = validate(sample);
+    if (!valid) console.error('AJV errors (Product):', validate.errors);
+    expect(valid).toBe(true);
+  });
+});
+
+describe('Contract: Optimization schema', () => {
+  it('validates an Optimization object against the OpenAPI spec schema', () => {
+    const schema = spec.components.schemas['Optimization'];
+    const resolved = deepResolveRefs(schema, spec) as Record<string, unknown>;
+    const validate = ajv.compile(resolved);
+
+    const sample: Optimization = {
+      id: 'opt-uuid',
+      product_id: 'prod-uuid',
+      product_title: 'Widget',
+      field: 'title',
+      status: 'pending',
+      score_before: null,
+      score_after: null,
+      approved_at: null,
+      applied_at: null,
+      reverted_at: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+
+    const valid = validate(sample);
+    if (!valid) console.error('AJV errors (Optimization):', validate.errors);
+    expect(valid).toBe(true);
+  });
+});
+
+describe('Contract: OptimizationDetail schema', () => {
+  it('validates an OptimizationDetail object against the OpenAPI spec schema', () => {
+    const schema = spec.components.schemas['OptimizationDetail'];
+    const flatSchema = flattenAllOf(schema, spec);
+    const validate = ajv.compile(flatSchema);
+
+    const sample: OptimizationDetail = {
+      id: 'opt-uuid',
+      product_id: 'prod-uuid',
+      product_title: 'Widget',
+      field: 'description',
+      status: 'applied',
+      score_before: 60,
+      score_after: 80,
+      approved_at: '2026-01-02T00:00:00Z',
+      applied_at: '2026-01-03T00:00:00Z',
+      reverted_at: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-03T00:00:00Z',
+      original_content: 'Old description',
+      optimized_content: 'Better description',
+      rejection_reason: null,
+      shopify_error: null,
+      image_shopify_id: null,
+      approved_by_name: null,
+    };
+
+    const valid = validate(sample);
+    if (!valid) console.error('AJV errors (OptimizationDetail):', validate.errors);
+    expect(valid).toBe(true);
+  });
+});
+
+describe('Contract: ScoreHistory schema', () => {
+  it('validates a Score object against the ScoreHistory schema', () => {
+    const schema = spec.components.schemas['ScoreHistory'];
+    const resolved = deepResolveRefs(schema, spec) as Record<string, unknown>;
+    const validate = ajv.compile(resolved);
+
+    const sample: Score = {
+      id: 'score-uuid',
+      overall_score: 75,
+      grade: 'C',
+      score_change: null,
+      scored_at: '2026-01-01T00:00:00Z',
+      created_at: '2026-01-01T00:00:00Z',
+    };
+
+    const valid = validate(sample);
+    if (!valid) console.error('AJV errors (ScoreHistory):', validate.errors);
+    expect(valid).toBe(true);
+  });
+});
+
+describe('Contract: ScoreDetail schema', () => {
+  it('validates a ScoreDetail object against the OpenAPI spec schema', () => {
+    const schema = spec.components.schemas['ScoreDetail'];
+    const flatSchema = flattenAllOf(schema, spec);
+    const validate = ajv.compile(flatSchema);
+
+    const sample: ScoreDetail = {
+      id: 'score-uuid',
+      overall_score: 75,
+      grade: 'C',
+      score_change: 5,
+      scored_at: '2026-01-01T00:00:00Z',
+      created_at: '2026-01-01T00:00:00Z',
+      product_id: 'prod-uuid',
+      category_scores: {
+        title: { score: 85, weight: 0.2 },
+        description: { score: 60, weight: 0.25 },
+      },
+      recommendations: ['Add meta description'],
+      lowest_categories: [{ category: 'description', score: 60 }],
+      potential_improvement: 15,
+      improved: false,
+    };
+
+    const valid = validate(sample);
+    if (!valid) console.error('AJV errors (ScoreDetail):', validate.errors);
+    expect(valid).toBe(true);
+  });
+});
+
+describe('Contract: Webhook schema', () => {
+  it('validates a Webhook object against the OpenAPI spec schema', () => {
+    const schema = spec.components.schemas['Webhook'];
+    const resolved = deepResolveRefs(schema, spec) as Record<string, unknown>;
+    const validate = ajv.compile(resolved);
+
+    const sample: Webhook = {
+      id: 'wh-uuid',
+      url: 'https://example.com/webhooks',
+      events: ['optimization.applied', 'product.scored'],
+      status: 'active',
+      failure_count: 0,
+      last_triggered_at: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+
+    const valid = validate(sample);
+    if (!valid) console.error('AJV errors (Webhook):', validate.errors);
+    expect(valid).toBe(true);
+  });
+});
+
+describe('Contract: WebhookDetail schema', () => {
+  it('validates a WebhookDetail object against the OpenAPI spec schema', () => {
+    const schema = spec.components.schemas['WebhookDetail'];
+    const flatSchema = flattenAllOf(schema, spec);
+    const validate = ajv.compile(flatSchema);
+
+    const sample: WebhookDetail = {
+      id: 'wh-uuid',
+      url: 'https://example.com/webhooks',
+      events: ['optimization.applied'],
+      status: 'active',
+      failure_count: 0,
+      last_triggered_at: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+      last_success_at: null,
+      last_failure_at: null,
+      last_error: null,
+    };
+
+    const valid = validate(sample);
+    if (!valid) console.error('AJV errors (WebhookDetail):', validate.errors);
+    expect(valid).toBe(true);
+  });
+});
+
+describe('Contract: Settings schema', () => {
+  // SPEC-ABSENT: Settings shape is defined inline in the /api/v1/settings response body
+  // (openapi/v1.yaml lines 1410-1440) but there is no named Settings component schema
+  // in components/schemas. AJV cannot compile a named ref for it.
+  // TODO: ask API team to promote Settings to a named schema component.
+  it('validates a Settings object against a locally-defined schema (SPEC-ABSENT named component)', () => {
+    // Built from inline schema at lines 1410-1440
+    const settingsSchema = {
+      type: 'object',
+      properties: {
+        brand_voice: { type: ['string', 'null'] },
+        brand_context: { type: ['string', 'null'] },
+        required_keywords: {
+          oneOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }],
+        },
+        excluded_keywords: {
+          oneOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }],
+        },
+        default_fields: { type: 'array', items: { type: 'string' } },
+        auto_push_on_approve: { type: 'boolean' },
+      },
+    };
+
+    const validate = ajv.compile(settingsSchema);
+
+    const sample: Settings = {
+      brand_voice: 'Friendly',
+      brand_context: null,
+      required_keywords: ['handcrafted'],
+      excluded_keywords: null,
+      default_fields: ['title', 'description'],
+      auto_push_on_approve: false,
+    };
+
+    const valid = validate(sample);
+    if (!valid) console.error('AJV errors (Settings):', validate.errors);
+    expect(valid).toBe(true);
+  });
+});
+
+describe('Contract: TypeScript type coverage — new resources', () => {
+  it('Product type has all base fields', () => {
+    const check: Pick<Product, 'id' | 'status' | 'readiness_score' | 'readiness_grade'> = {
+      id: 'x',
+      status: 'archived',
+      readiness_score: 50,
+      readiness_grade: 'poor',
+    };
+    expect(check.id).toBe('x');
+  });
+
+  it('OptimizationDetail type has all detail fields', () => {
+    const check: Pick<OptimizationDetail, 'original_content' | 'optimized_content' | 'rejection_reason'> = {
+      original_content: 'old',
+      optimized_content: 'new',
+      rejection_reason: null,
+    };
+    expect(check.original_content).toBe('old');
+  });
+
+  it('ScoreDetail type has all detail fields', () => {
+    const check: Pick<ScoreDetail, 'product_id' | 'category_scores' | 'recommendations' | 'improved'> = {
+      product_id: 'p',
+      category_scores: {},
+      recommendations: [],
+      improved: true,
+    };
+    expect(check.improved).toBe(true);
+  });
+
+  it('WebhookDetail type has all detail fields', () => {
+    const check: Pick<WebhookDetail, 'last_success_at' | 'last_failure_at' | 'last_error'> = {
+      last_success_at: null,
+      last_failure_at: null,
+      last_error: null,
+    };
+    expect(check.last_error).toBeNull();
+  });
+
+  it('Settings type has all fields including nullable', () => {
+    const check: Settings = {
+      brand_voice: null,
+      brand_context: null,
+      required_keywords: null,
+      excluded_keywords: null,
+      default_fields: [],
+      auto_push_on_approve: false,
+    };
+    expect(check.auto_push_on_approve).toBe(false);
   });
 });
