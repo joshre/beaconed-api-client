@@ -10,7 +10,8 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import Ajv from 'ajv';
 import type { Product, ProductDetail, ProductCreateInput } from '../src/resources/products.js';
@@ -31,7 +32,9 @@ let spec: OpenApiSpec;
 let ajv: Ajv;
 
 beforeAll(() => {
-  const specPath = resolve('/Users/josh/web/beaconed/openapi/v1.yaml');
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const specPath = resolve(__dirname, '../spec/v1.yaml');
   const raw = readFileSync(specPath, 'utf-8');
   spec = yaml.load(raw) as OpenApiSpec;
 

@@ -1,0 +1,1493 @@
+openapi: 3.1.0
+info:
+  title: Beaconed API
+  version: v1
+  description: |
+    RESTful API for Beaconed AI product optimization platform.
+
+    ## Authentication
+
+    All API requests require authentication via the `Authorization` header. Two methods are supported:
+
+    **API Key (recommended)**:  Pass your API key directly as a Bearer token.
+
+    ```
+    Authorization: Bearer <your-api-key>
+    ```
+
+    **JWT Token**: Generate a JWT from your API key and pass it as a Bearer token.
+
+    ```
+    Authorization: Bearer <your-jwt-token>
+    ```
+
+    Generate API keys in your Beaconed dashboard under Settings > API Keys.
+
+    ## Rate Limiting
+
+    - General endpoints: 100 requests per minute per API key
+    - Expensive endpoints (sync, calculation, approval, application): 10 requests per minute
+
+    Rate limit headers are included in all responses:
+    - `X-RateLimit-Limit`: Maximum requests allowed
+    - `X-RateLimit-Remaining`: Requests remaining
+    - `Retry-After`: Seconds to wait if rate limited
+
+    ## Pagination
+
+    List endpoints support pagination with the following query parameters:
+    - `page`: Page number (default: 1)
+    - `per_page`: Items per page (default: 25, max: 100)
+
+    Pagination headers in responses:
+    - `X-Page`: Current page
+    - `X-Per-Page`: Items per page
+    - `X-Total`: Total items
+    - `X-Total-Pages`: Total pages
+  contact:
+    name: Beaconed Support
+    email: support@beaconed.ai
+  license:
+    name: Proprietary
+servers:
+  - url: https://beaconed.ai
+    description: Production
+  - url: http://localhost:3000
+    description: Development
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from API key authentication
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            status:
+              type: integer
+              example: 400
+            code:
+              type: string
+              example: BAD_REQUEST
+            message:
+              type: string
+              example: Invalid request
+          required:
+            - status
+            - code
+            - message
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        shopify_id:
+          type: integer
+        title:
+          type: string
+        handle:
+          type: string
+        status:
+          type: string
+          enum: [active, draft, archived]
+        vendor:
+          type: string
+        product_type:
+          type: string
+        readiness_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        readiness_grade:
+          type: string
+          enum: [excellent, good, fair, poor, critical]
+        optimization_status:
+          type: string
+          nullable: true
+        pending_optimizations_count:
+          type: integer
+        primary_image_url:
+          type: string
+          format: uri
+          nullable: true
+        last_synced_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ProductDetail:
+      allOf:
+        - $ref: '#/components/schemas/Product'
+        - type: object
+          properties:
+            description:
+              type: string
+              nullable: true
+            meta_title:
+              type: string
+              nullable: true
+            meta_description:
+              type: string
+              nullable: true
+            og_title:
+              type: string
+              nullable: true
+              description: AI-optimized Open Graph title for social media previews
+            og_description:
+              type: string
+              nullable: true
+              description: AI-optimized Open Graph description for social media previews
+            tags:
+              type: string
+              nullable: true
+            options:
+              type: array
+              items:
+                type: object
+            images:
+              type: array
+              items:
+                $ref: '#/components/schemas/Image'
+            price_min:
+              type: number
+              nullable: true
+            latest_optimization:
+              $ref: '#/components/schemas/OptimizationSummary'
+            score_history:
+              type: array
+              items:
+                $ref: '#/components/schemas/ScoreHistorySummary'
+
+    ProductInput:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Product title
+        description:
+          type: string
+          description: Full product description (HTML supported)
+        handle:
+          type: string
+          description: URL-safe product handle
+        status:
+          type: string
+          enum: [active, draft, archived]
+        vendor:
+          type: string
+          description: Brand or manufacturer name
+        product_type:
+          type: string
+          description: Product category
+        meta_title:
+          type: string
+          description: SEO meta title (shown in search results)
+        meta_description:
+          type: string
+          description: SEO meta description (shown in search results)
+        og_title:
+          type: string
+          description: Open Graph title for social media previews
+        og_description:
+          type: string
+          description: Open Graph description for social media previews
+        tags:
+          type: string
+          description: Comma-separated product tags
+        external_id:
+          type: string
+          description: Your system's product ID. Used for idempotency on create.
+        images:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              src:
+                type: string
+                format: uri
+              altText:
+                type: string
+              width:
+                type: integer
+              height:
+                type: integer
+
+    Image:
+      type: object
+      properties:
+        id:
+          type: string
+        src:
+          type: string
+          format: uri
+        alt_text:
+          type: string
+          nullable: true
+        width:
+          type: integer
+        height:
+          type: integer
+
+    Optimization:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        product_title:
+          type: string
+        field:
+          type: string
+          enum: [title, description, alt_text, meta_title, meta_description, tags, product_type, og_title, og_description]
+        status:
+          type: string
+          enum: [pending, approved, rejected, applied, reverted]
+        score_before:
+          type: integer
+          nullable: true
+        score_after:
+          type: integer
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        applied_at:
+          type: string
+          format: date-time
+          nullable: true
+        reverted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    OptimizationDetail:
+      allOf:
+        - $ref: '#/components/schemas/Optimization'
+        - type: object
+          properties:
+            original_content:
+              type: string
+            optimized_content:
+              type: string
+            rejection_reason:
+              type: string
+              nullable: true
+            shopify_error:
+              type: string
+              nullable: true
+            image_shopify_id:
+              type: integer
+              nullable: true
+            approved_by_name:
+              type: string
+              nullable: true
+
+    OptimizationSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        field:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ScoreHistory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        overall_score:
+          type: integer
+        grade:
+          type: string
+        score_change:
+          type: integer
+          nullable: true
+        scored_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    ScoreHistorySummary:
+      type: object
+      properties:
+        overall_score:
+          type: integer
+        grade:
+          type: string
+        scored_at:
+          type: string
+          format: date-time
+        score_change:
+          type: integer
+          nullable: true
+
+    ScoreDetail:
+      allOf:
+        - $ref: '#/components/schemas/ScoreHistory'
+        - type: object
+          properties:
+            product_id:
+              type: string
+              format: uuid
+            category_scores:
+              type: object
+              additionalProperties:
+                type: object
+                properties:
+                  score:
+                    type: number
+                  weight:
+                    type: number
+            recommendations:
+              type: array
+              items:
+                type: string
+            lowest_categories:
+              type: array
+              items:
+                type: object
+                properties:
+                  category:
+                    type: string
+                  score:
+                    type: number
+            potential_improvement:
+              type: number
+            improved:
+              type: boolean
+
+    ScoreCalculationResult:
+      type: object
+      properties:
+        product_id:
+          type: string
+          format: uuid
+        overall_score:
+          type: integer
+        grade:
+          type: string
+        category_scores:
+          type: object
+        recommendations:
+          type: array
+          items:
+            type: string
+        calculated_at:
+          type: string
+          format: date-time
+
+    Webhook:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [active, paused, disabled]
+        failure_count:
+          type: integer
+        last_triggered_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    WebhookDetail:
+      allOf:
+        - $ref: '#/components/schemas/Webhook'
+        - type: object
+          properties:
+            last_success_at:
+              type: string
+              format: date-time
+              nullable: true
+            last_failure_at:
+              type: string
+              format: date-time
+              nullable: true
+            last_error:
+              type: string
+              nullable: true
+
+    WebhookCreate:
+      type: object
+      required:
+        - url
+        - events
+      properties:
+        url:
+          type: string
+          format: uri
+          description: HTTPS URL to receive webhook deliveries
+        events:
+          type: array
+          items:
+            type: string
+            enum:
+              - optimization.created
+              - optimization.approved
+              - optimization.rejected
+              - optimization.applied
+              - optimization.reverted
+              - product.scored
+              - product.synced
+          description: Events to subscribe to
+
+    WebhookEvent:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/products:
+    get:
+      summary: List all products
+      description: Returns a paginated list of products for the authenticated account
+      operationId: listProducts
+      tags:
+        - Products
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 25
+            maximum: 100
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, draft, archived]
+        - name: min_score
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+        - name: max_score
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+        - name: grade
+          in: query
+          schema:
+            type: string
+            enum: [excellent, good, fair, poor, critical]
+        - name: needs_optimization
+          in: query
+          schema:
+            type: boolean
+        - name: q
+          in: query
+          description: Search by title
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-code-samples:
+        - label: Ruby
+          lang: ruby
+          source: |
+            uri = URI("https://beaconed.ai/api/v1/products?per_page=10")
+            req = Net::HTTP::Get.new(uri)
+            req["Authorization"] = "Bearer #{token}"
+            response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true) { |http| http.request(req) }
+      x-response-example: |
+        {
+          "success": true,
+          "data": [
+            {
+              "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+              "shopify_id": 7982561779890,
+              "title": "Organic Cotton T-Shirt",
+              "status": "active",
+              "readiness_score": 85,
+              "grade": "B",
+              "optimized_at": "2026-03-15T14:30:00Z",
+              "created_at": "2026-03-01T10:00:00Z"
+            }
+          ]
+        }
+
+    post:
+      summary: Create a product
+      description: Create a product from external data (non-Shopify). Use external_id for idempotency.
+      operationId: createProduct
+      tags:
+        - Products
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - product
+              properties:
+                product:
+                  $ref: '#/components/schemas/ProductInput'
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductDetail'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-request-example: '{"product": {"title": "New Product", "shopify_id": 123456}}'
+
+  /api/v1/products/{id}:
+    get:
+      summary: Get a product
+      description: Returns detailed information about a specific product
+      operationId: getProduct
+      tags:
+        - Products
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductDetail'
+        '404':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    patch:
+      summary: Update a product
+      description: Update a product's fields. Only include fields you want to change.
+      operationId: updateProduct
+      tags:
+        - Products
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                product:
+                  $ref: '#/components/schemas/ProductInput'
+      responses:
+        '200':
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductDetail'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-request-example: '{"product": {"tags": "organic,cotton,sustainable"}}'
+
+  /api/v1/products/{product_id}/sync:
+    post:
+      summary: Sync a product
+      description: Triggers a sync of the product from Shopify
+      operationId: syncProduct
+      tags:
+        - Products
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '202':
+          description: Sync queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                      product_id:
+                        type: string
+                        format: uuid
+
+  /api/v1/products/{product_id}/optimization:
+    post:
+      summary: Request optimization
+      description: |
+        Queue AI optimization for one or more fields on a product.
+        Each field generates a separate Optimization record with suggested content.
+        Poll GET /api/v1/optimizations?product_id={product_id}&status=pending to retrieve results.
+      operationId: requestOptimization
+      tags:
+        - Products
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fields:
+                  type: array
+                  items:
+                    type: string
+                    enum: [title, description, alt_text, meta_title, meta_description, tags, product_type, og_title, og_description]
+                  description: Fields to optimize. Defaults to all fields if omitted.
+      responses:
+        '202':
+          description: Optimization queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                      product_id:
+                        type: string
+                        format: uuid
+                      product_title:
+                        type: string
+                      status:
+                        type: string
+                        example: queued
+      x-request-example: '{"fields": ["title", "description"]}'
+      x-response-example: |
+        {
+          "success": true,
+          "data": {
+            "id": "opt-uuid-here",
+            "product_id": "a1b2c3d4-...",
+            "fields": ["title", "description"],
+            "status": "queued",
+            "created_at": "2026-03-31T10:00:00Z"
+          }
+        }
+
+  /api/v1/products/{product_id}/scores:
+    get:
+      summary: List scores
+      description: Returns the score history for a product
+      operationId: listScores
+      tags:
+        - Scores
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: until
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: grade
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScoreHistory'
+
+  /api/v1/products/{product_id}/scores/latest:
+    get:
+      summary: Get latest score
+      description: Returns the latest score for a product
+      operationId: getLatestScore
+      tags:
+        - Scores
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ScoreDetail'
+      x-response-example: |
+        {
+          "success": true,
+          "data": {
+            "id": "score-uuid",
+            "product_id": "a1b2c3d4-...",
+            "overall_score": 72,
+            "grade": "C",
+            "category_scores": {
+              "title": {"score": 85, "weight": 0.2},
+              "description": {"score": 60, "weight": 0.25},
+              "images": {"score": 70, "weight": 0.2},
+              "metadata": {"score": 55, "weight": 0.15}
+            },
+            "recommendations": [
+              "Add meta description with primary keywords",
+              "Include alt text for all product images"
+            ],
+            "created_at": "2026-03-31T10:00:00Z"
+          }
+        }
+
+  /api/v1/products/{product_id}/scores/calculation:
+    post:
+      summary: Calculate score
+      description: Recalculates the readiness score for a product
+      operationId: calculateScore
+      tags:
+        - Scores
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Score calculated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ScoreCalculationResult'
+
+  /api/v1/optimizations:
+    get:
+      summary: List optimizations
+      description: Returns a paginated list of optimizations
+      operationId: listOptimizations
+      tags:
+        - Optimizations
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected, applied, reverted]
+        - name: field
+          in: query
+          schema:
+            type: string
+            enum: [title, description, alt_text, meta_title, meta_description, tags, product_type, og_title, og_description]
+        - name: product_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Optimization'
+
+  /api/v1/optimizations/{id}:
+    get:
+      summary: Get an optimization
+      description: Returns detailed information about an optimization
+      operationId: getOptimization
+      tags:
+        - Optimizations
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/OptimizationDetail'
+
+  /api/v1/optimizations/{id}/approval:
+    post:
+      summary: Approve an optimization
+      description: Approves a pending optimization
+      operationId: approveOptimization
+      tags:
+        - Optimizations
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Optimization approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/OptimizationDetail'
+        '422':
+          description: Cannot approve (wrong status)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/optimizations/{id}/rejection:
+    post:
+      summary: Reject an optimization
+      description: Rejects a pending optimization
+      operationId: rejectOptimization
+      tags:
+        - Optimizations
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: Reason for rejection
+      responses:
+        '200':
+          description: Optimization rejected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/OptimizationDetail'
+      x-request-example: '{"reason": "Content does not match brand voice"}'
+
+  /api/v1/optimizations/{id}/application:
+    post:
+      summary: Apply an optimization
+      description: Pushes an approved optimization to Shopify
+      operationId: applyOptimization
+      tags:
+        - Optimizations
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '202':
+          description: Apply queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                      optimization_id:
+                        type: string
+                        format: uuid
+
+  /api/v1/optimizations/{id}/reversion:
+    post:
+      summary: Revert an optimization
+      description: Reverts an applied optimization back to original content
+      operationId: revertOptimization
+      tags:
+        - Optimizations
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '202':
+          description: Revert queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                      optimization_id:
+                        type: string
+                        format: uuid
+
+  /api/v1/webhooks:
+    get:
+      summary: List webhooks
+      description: Returns webhooks registered for the current API key
+      operationId: listWebhooks
+      tags:
+        - Webhooks
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Webhook'
+
+    post:
+      summary: Create a webhook
+      description: Creates a new webhook subscription
+      operationId: createWebhook
+      tags:
+        - Webhooks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - webhook
+              properties:
+                webhook:
+                  $ref: '#/components/schemas/WebhookCreate'
+      responses:
+        '201':
+          description: Webhook created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: '#/components/schemas/WebhookDetail'
+                      - type: object
+                        properties:
+                          secret:
+                            type: string
+                            description: Webhook secret (only returned on creation)
+      x-request-example: '{"webhook": {"url": "https://example.com/webhooks", "events": ["optimization.applied", "product.scored"]}}'
+      x-response-example: |
+        {
+          "success": true,
+          "data": {
+            "id": "wh-uuid",
+            "url": "https://example.com/webhooks",
+            "events": ["optimization.applied", "product.scored"],
+            "status": "active",
+            "secret": "whsec_a1b2c3d4e5f6...",
+            "created_at": "2026-03-31T10:00:00Z"
+          }
+        }
+
+  /api/v1/webhooks/{id}:
+    get:
+      summary: Get a webhook
+      description: Returns details about a webhook subscription
+      operationId: getWebhook
+      tags:
+        - Webhooks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/WebhookDetail'
+
+    patch:
+      summary: Update a webhook
+      description: Updates a webhook subscription
+      operationId: updateWebhook
+      tags:
+        - Webhooks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                webhook:
+                  type: object
+                  properties:
+                    url:
+                      type: string
+                      format: uri
+                    events:
+                      type: array
+                      items:
+                        type: string
+                    status:
+                      type: string
+                      enum: [active, paused]
+      responses:
+        '200':
+          description: Webhook updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/WebhookDetail'
+      x-request-example: '{"webhook": {"events": ["optimization.applied"]}}'
+
+    delete:
+      summary: Delete a webhook
+      description: Removes a webhook subscription
+      operationId: deleteWebhook
+      tags:
+        - Webhooks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Webhook deleted
+
+  /api/v1/webhooks/{id}/test:
+    post:
+      summary: Test a webhook
+      description: Sends a test event to the webhook
+      operationId: testWebhook
+      tags:
+        - Webhooks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '202':
+          description: Test queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                      webhook_id:
+                        type: string
+                        format: uuid
+
+  /api/v1/webhooks/events:
+    get:
+      summary: List webhook events
+      description: Returns all available webhook events
+      operationId: listWebhookEvents
+      tags:
+        - Webhooks
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      events:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/WebhookEvent'
+
+  /api/v1/bulk_optimizations:
+    post:
+      summary: Create bulk optimization
+      description: |
+        Submit a list of product IDs for batch optimization. Each product is processed
+        independently — failures on one product don't affect others.
+      operationId: createBulkOptimization
+      tags:
+        - Bulk Optimizations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - product_ids
+              properties:
+                product_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  description: Array of product UUIDs to optimize
+                fields:
+                  type: array
+                  items:
+                    type: string
+                    enum: [title, description, alt_text, meta_title, meta_description, tags, product_type, og_title, og_description]
+                  description: Fields to optimize. Defaults to all fields if omitted.
+      responses:
+        '202':
+          description: Bulk optimization queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      queued_count:
+                        type: integer
+                      queued_product_ids:
+                        type: array
+                        items:
+                          type: string
+                          format: uuid
+                      skipped_product_ids:
+                        type: array
+                        items:
+                          type: string
+                          format: uuid
+                      credits_remaining:
+                        type: integer
+                        nullable: true
+                        description: Remaining credits. Null for unlimited plans.
+      x-request-example: '{"product_ids": ["uuid-1", "uuid-2", "uuid-3"], "fields": ["title", "description"]}'
+      x-response-example: |
+        {
+          "data": {
+            "queued_count": 3,
+            "queued_product_ids": ["uuid-1", "uuid-2", "uuid-3"],
+            "skipped_product_ids": [],
+            "credits_remaining": 47
+          }
+        }
+
+  /api/v1/settings:
+    get:
+      summary: Get settings
+      description: Returns your account's optimization settings including brand voice, keyword preferences, and default fields.
+      operationId: getSettings
+      tags:
+        - Settings
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      brand_voice:
+                        type: string
+                        nullable: true
+                        description: Brand voice/tone guidance for AI-generated content
+                      brand_context:
+                        type: string
+                        nullable: true
+                        description: Additional brand context for AI optimization
+                      required_keywords:
+                        type: array
+                        items:
+                          type: string
+                        nullable: true
+                        description: Keywords that must appear in optimized content
+                      excluded_keywords:
+                        type: array
+                        items:
+                          type: string
+                        nullable: true
+                        description: Keywords to avoid in optimized content
+                      default_fields:
+                        type: array
+                        items:
+                          type: string
+                        description: Default fields to optimize when none specified
+                      auto_push_on_approve:
+                        type: boolean
+                        description: Whether approved optimizations are automatically pushed to Shopify
+      x-response-example: |
+        {
+          "data": {
+            "brand_voice": "Friendly, approachable, expert",
+            "brand_context": "Premium home decor for modern living",
+            "required_keywords": ["handcrafted", "sustainable"],
+            "excluded_keywords": ["cheap"],
+            "default_fields": ["title", "description", "meta_title", "meta_description"],
+            "auto_push_on_approve": false
+          }
+        }
+
+tags:
+  - name: Products
+    description: |
+      Products represent your catalog items. Use these endpoints to list, create, update,
+      sync from Shopify, and request AI optimizations.
+    x-docs-model:
+      schema: ProductDetail
+      description: |
+        The product model contains core catalog data, readiness scoring, and references to
+        optimizations.
+  - name: Scores
+    description: |
+      Scores measure how well a product is structured for AI shopping agents. Each score
+      breaks down into category-level assessments across title, description, images, and metadata.
+    x-docs-model:
+      schema: ScoreDetail
+      description: |
+        The score model contains an overall composite score and per-category scores for
+        title, description, images, and metadata.
+  - name: Optimizations
+    description: |
+      Optimizations are AI-generated improvements to product content. Each optimization
+      follows a lifecycle: pending, approved or rejected, then applied or reverted.
+    x-docs-model:
+      schema: OptimizationDetail
+      description: |
+        The optimization model contains the AI-generated content suggestions, their status
+        in the approval workflow, and the rationale behind each change.
+  - name: Webhooks
+    description: |
+      Subscribe to real-time events when optimizations change status, products are scored,
+      or syncs complete. Webhooks are delivered as POST requests to your URL.
+    x-docs-model:
+      schema: WebhookDetail
+      description: |
+        The webhook model contains the endpoint URL, subscribed events, signing secret,
+        and delivery status information.
+  - name: Bulk Optimizations
+    description: Optimize multiple products in a single request. Each product is queued for optimization and processed asynchronously.
+  - name: Settings
+    description: Retrieve your account configuration, usage limits, and current credit balance.
