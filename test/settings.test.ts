@@ -46,7 +46,7 @@ describe('SettingsResource.get()', () => {
     expect(url).toBe('https://beaconed.ai/api/v1/settings');
     expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer test-key');
     expect((init.headers as Record<string, string>)['Accept']).toBe('application/json');
-    expect((init.headers as Record<string, string>)['User-Agent']).toMatch(/@joshre\/beaconed-api-client/);
+    expect((init.headers as Record<string, string>)['User-Agent']).toMatch(/@beaconed\/api-client/);
     expect(result.brand_voice).toBe('Friendly, approachable, expert');
     expect(result.auto_push_on_approve).toBe(false);
   });

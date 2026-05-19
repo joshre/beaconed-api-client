@@ -1,5 +1,5 @@
 {
-  "name": "@joshre/beaconed-api-client",
+  "name": "@beaconed/api-client",
   "version": "0.0.1",
   "description": "TypeScript HTTP client for the Beaconed v1 API",
   "license": "MIT",
@@ -22,7 +22,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "vitest",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\""

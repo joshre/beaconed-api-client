@@ -1,4 +1,4 @@
-// Public API surface for @joshre/beaconed-api-client
+// Public API surface for @beaconed/api-client
 
 export { BeaconedClient } from './client.js';
 export type { BeaconedClientConfig } from './client.js';

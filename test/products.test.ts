@@ -71,7 +71,7 @@ describe('ProductsResource.list()', () => {
     expect(url).toBe('https://beaconed.ai/api/v1/products');
     expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer test-key');
     expect((init.headers as Record<string, string>)['Accept']).toBe('application/json');
-    expect((init.headers as Record<string, string>)['User-Agent']).toMatch(/@joshre\/beaconed-api-client/);
+    expect((init.headers as Record<string, string>)['User-Agent']).toMatch(/@beaconed\/api-client/);
     expect(result.data).toHaveLength(1);
     expect(result.data[0].id).toBe('prod-1');
     expect(result.pageInfo.page).toBe(1);

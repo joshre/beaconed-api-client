@@ -84,7 +84,7 @@ describe('BulkOptimizationsResource.create()', () => {
     const headers = init.headers as Record<string, string>;
     expect(headers['Authorization']).toBe('Bearer test-key');
     expect(headers['Accept']).toBe('application/json');
-    expect(headers['User-Agent']).toMatch(/@joshre\/beaconed-api-client/);
+    expect(headers['User-Agent']).toMatch(/@beaconed\/api-client/);
   });
 
   it('handles credits_remaining: null (unlimited plan)', async () => {

@@ -7,4 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Initial scaffold
+## [0.0.1] - 2026-05-19
+
+### Added
+
+- Initial release.
+- TypeScript client wrapping the Beaconed v1 API — auth, pagination, all 27 endpoints.

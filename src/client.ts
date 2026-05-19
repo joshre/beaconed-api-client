@@ -1,5 +1,5 @@
 /**
- * BeaconedClient — the main entry point for the @joshre/beaconed-api-client library.
+ * BeaconedClient — the main entry point for the @beaconed/api-client library.
  *
  * ## Authentication
  *
@@ -54,7 +54,7 @@ export class BeaconedClient {
     this.apiKey = config.apiKey;
     this.baseUrl = (config.baseUrl ?? 'https://beaconed.ai').replace(/\/$/, '');
     this.userAgent =
-      config.userAgent ?? `@joshre/beaconed-api-client/${VERSION}`;
+      config.userAgent ?? `@beaconed/api-client/${VERSION}`;
     this.products = new ProductsResource(this);
     this.optimizations = new OptimizationsResource(this);
     this.bulkOptimizations = new BulkOptimizationsResource(this);

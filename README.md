@@ -1,70 +1,83 @@
-# @joshre/beaconed-api-client
+# @beaconed/api-client
 
-TypeScript HTTP client for the [Beaconed](https://beaconed.ai) v1 API. This is the shared library that `beaconed-mcp` and `beaconed-cli` depend on — it wraps every endpoint in the Beaconed v1 spec, handles API-key auth, typed error classes, automatic retries with `Retry-After` respect, and async pagination iterators so callers never need to handle raw HTTP.
-
-> Status: alpha, expect breaking changes before 1.0.
+TypeScript client for the Beaconed v1 API. Handles auth, typed error classes, automatic `Retry-After` respect, and async pagination — so callers never need to manage raw HTTP. Used by `@beaconed/mcp` and `@beaconed/cli`.
 
 ## Install
 
-```
-pnpm add @joshre/beaconed-api-client
+```bash
+npm install @beaconed/api-client
+pnpm add @beaconed/api-client
+yarn add @beaconed/api-client
 ```
 
 ## Quickstart
 
-Get your API key at [beaconed.ai/docs](https://beaconed.ai/docs) under Settings > API Keys.
-
 ```typescript
-import { BeaconedClient } from '@joshre/beaconed-api-client';
+import { BeaconedClient } from '@beaconed/api-client';
 
-const beaconed = new BeaconedClient({ apiKey: process.env.BEACONED_API_KEY! });
+const client = new BeaconedClient({ apiKey: process.env.BEACONED_API_KEY! });
 
-// Fetch a single product by ID
-const product = await beaconed.products.get('abc-123');
+// Fetch one product
+const product = await client.products.get('abc-123');
 console.log(product.title, product.readiness_score);
+
+// Paginate
+const page = await client.products.list({ page: 1, perPage: 50 });
+console.log(page.data.length, page.pageInfo.total);
 ```
+
+Get your API key at [beaconed.ai](https://beaconed.ai) under Settings > API Keys.
+
+## API coverage
+
+- **Products** — list, get, create, update, sync, optimize, calculate-score, score history, optimizations
+- **Optimizations** — list, get, approve, reject, apply, revert
+- **Bulk Optimizations** — queue optimization for multiple products in one call
+- **Scores** — list, latest
+- **Settings** — get account optimization settings
+- **Webhooks** — list, get, create, update, delete, test, event catalog
 
 ## Error handling
 
-```typescript
-import { BeaconedClient, BeaconedNotFoundError, BeaconedValidationError } from '@joshre/beaconed-api-client';
+All errors extend `BeaconedError`. Import and catch what you need:
 
-const beaconed = new BeaconedClient({ apiKey: process.env.BEACONED_API_KEY! });
+```typescript
+import {
+  BeaconedClient,
+  BeaconedNotFoundError,
+  BeaconedValidationError,
+  BeaconedRateLimitError,
+} from '@beaconed/api-client';
 
 try {
-  const product = await beaconed.products.get('bad-id');
+  const product = await client.products.get('bad-id');
 } catch (err) {
   if (err instanceof BeaconedNotFoundError) {
-    console.error('Product not found');
+    console.error('not found');
   } else if (err instanceof BeaconedValidationError) {
-    console.error('Validation errors:', err.validationErrors);
+    console.error('validation errors:', err.validationErrors);
+  } else if (err instanceof BeaconedRateLimitError) {
+    console.error(`rate limited, retry after ${err.retryAfterSeconds}s`);
   } else {
     throw err;
   }
 }
 ```
 
-## Authentication
+| Class | HTTP status |
+|-------|------------|
+| `BeaconedAuthError` | 401 |
+| `BeaconedForbiddenError` | 403 |
+| `BeaconedNotFoundError` | 404 |
+| `BeaconedValidationError` | 422 |
+| `BeaconedRateLimitError` | 429 |
+| `BeaconedServerError` | 5xx |
+| `BeaconedNetworkError` | network failure |
 
-Pass your API key directly — no JWT exchange required:
+## API docs
 
-```typescript
-const beaconed = new BeaconedClient({
-  apiKey: 'your_api_key_here',
-  baseUrl: 'https://beaconed.ai', // default; override for local dev
-});
-```
+[https://beaconed.ai/api/docs](https://beaconed.ai/api/docs)
 
-## Error classes
+## License
 
-| Class | Status | Description |
-|-------|--------|-------------|
-| `BeaconedAuthError` | 401 | Missing or invalid API key |
-| `BeaconedForbiddenError` | 403 | Valid key, insufficient permissions |
-| `BeaconedNotFoundError` | 404 | Resource not found |
-| `BeaconedValidationError` | 422 | Validation failed — check `.validationErrors` |
-| `BeaconedRateLimitError` | 429 | Rate limited — check `.retryAfterSeconds` |
-| `BeaconedServerError` | 5xx | Server error |
-| `BeaconedNetworkError` | 0 | Network failure (fetch threw) |
-
-All classes extend `BeaconedError` which extends `Error`.
+MIT — see [LICENSE](LICENSE).

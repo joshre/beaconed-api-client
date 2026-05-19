@@ -70,7 +70,7 @@ describe('WebhooksResource.list()', () => {
     expect(url).toBe('https://beaconed.ai/api/v1/webhooks');
     expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer test-key');
     expect((init.headers as Record<string, string>)['Accept']).toBe('application/json');
-    expect((init.headers as Record<string, string>)['User-Agent']).toMatch(/@joshre\/beaconed-api-client/);
+    expect((init.headers as Record<string, string>)['User-Agent']).toMatch(/@beaconed\/api-client/);
     expect(result.data).toHaveLength(1);
     expect(result.data[0].id).toBe('wh-1');
     expect(result.pageInfo.total).toBe(1);
@@ -120,7 +120,7 @@ describe('WebhooksResource.get()', () => {
     const headers = init.headers as Record<string, string>;
     expect(headers['Authorization']).toBe('Bearer test-key');
     expect(headers['Accept']).toBe('application/json');
-    expect(headers['User-Agent']).toMatch(/@joshre\/beaconed-api-client/);
+    expect(headers['User-Agent']).toMatch(/@beaconed\/api-client/);
   });
 
   it('throws BeaconedNotFoundError on 404', async () => {
