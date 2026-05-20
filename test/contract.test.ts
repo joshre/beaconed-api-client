@@ -14,6 +14,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import Ajv from 'ajv';
+import addFormats from 'ajv-formats';
 import type { Product, ProductDetail, ProductCreateInput } from '../src/resources/products.js';
 import type { Optimization, OptimizationDetail } from '../src/resources/optimizations.js';
 import type { BulkOptimizationInput, BulkOptimizationResult } from '../src/resources/bulk-optimizations.js';
@@ -39,9 +40,11 @@ beforeAll(() => {
   spec = yaml.load(raw) as OpenApiSpec;
 
   ajv = new Ajv({
-    strict: false,   // permit OpenAPI extensions and nullable
+    strict: false,        // permit OpenAPI extensions and nullable
     allErrors: true,
+    validateFormats: false, // silence "unknown format" warnings without enforcing format rules on test data
   });
+  addFormats(ajv);
 
   // Add all component schemas to AJV so $ref resolution works.
   // We register each schema with its $id matching the $ref format used in the spec.
