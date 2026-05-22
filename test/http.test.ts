@@ -22,10 +22,11 @@ function makeResponse(
   });
 }
 
-function makeClient(overrides?: { baseUrl?: string }): BeaconedClient {
+function makeClient(overrides?: { baseUrl?: string; clientId?: string }): BeaconedClient {
   return new BeaconedClient({
     apiKey: 'test-api-key',
     baseUrl: overrides?.baseUrl ?? 'https://beaconed.ai',
+    clientId: overrides?.clientId,
   });
 }
 
@@ -65,6 +66,31 @@ describe('request()', () => {
     const headers = init.headers as Record<string, string>;
     expect(headers['Authorization']).toBe('Bearer test-api-key');
     expect(headers['Accept']).toBe('application/json');
+  });
+
+  it('sends X-Client header when clientId is set', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(makeResponse(200, { data: {} }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await request(makeClient({ clientId: 'beaconed-mcp' }), {
+      method: 'GET',
+      path: '/api/v1/products',
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers['X-Client']).toBe('beaconed-mcp');
+  });
+
+  it('omits X-Client header when clientId is not set', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(makeResponse(200, { data: {} }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await request(makeClient(), { method: 'GET', path: '/api/v1/products' });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers['X-Client']).toBeUndefined();
   });
 
   it('does not send Content-Type when no body', async () => {

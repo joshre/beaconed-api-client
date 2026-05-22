@@ -34,12 +34,21 @@ export interface BeaconedClientConfig {
   apiKey: string;
   baseUrl?: string;
   userAgent?: string;
+  /**
+   * Identifies the calling client to the API. Sent as the `X-Client` header,
+   * which the server validates (`/^[a-z0-9][a-z0-9._-]{0,63}$/`, lowercased,
+   * capped at 64 chars) and records as the source of each request. Set this to
+   * a stable slug per integration, e.g. "beaconed-mcp" or "beaconed-cli".
+   * When omitted, no `X-Client` header is sent and the request is unattributed.
+   */
+  clientId?: string;
 }
 
 export class BeaconedClient {
   readonly apiKey: string;
   readonly baseUrl: string;
   readonly userAgent: string;
+  readonly clientId: string | undefined;
   readonly products: ProductsResource;
   readonly optimizations: OptimizationsResource;
   readonly bulkOptimizations: BulkOptimizationsResource;
@@ -55,6 +64,7 @@ export class BeaconedClient {
     this.baseUrl = (config.baseUrl ?? 'https://beaconed.ai').replace(/\/$/, '');
     this.userAgent =
       config.userAgent ?? `@beaconed/api-client/${VERSION}`;
+    this.clientId = config.clientId;
     this.products = new ProductsResource(this);
     this.optimizations = new OptimizationsResource(this);
     this.bulkOptimizations = new BulkOptimizationsResource(this);

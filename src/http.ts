@@ -94,6 +94,10 @@ export async function request<T>(
     'User-Agent': client.userAgent,
   };
 
+  if (client.clientId !== undefined) {
+    headers['X-Client'] = client.clientId;
+  }
+
   if (opts.body !== undefined) {
     headers['Content-Type'] = 'application/json';
   }
